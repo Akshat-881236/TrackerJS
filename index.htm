@@ -3,103 +3,34 @@
 <head>
 <meta charset="UTF-8">
 
-<!-- ================= CORE META ================= -->
-<title>Akshat Prasad - TrackerJS – Embedded Visit Dashboard</title>
+<title>TrackerJS – Embedded Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
+<!-- 🚫 INDEXING BLOCK -->
 <meta name="robots" content="noindex, nofollow">
 <meta name="googlebot" content="noindex, nofollow">
-<meta name="bingbot" content="noindex, nofollow">
 
-<meta name="description" content="TrackerJS embedded dashboard. Not for direct access. Opens only inside authorized projects.">
+<meta name="description" content="TrackerJS embedded dashboard. Opens only inside authorized projects.">
 <meta name="author" content="Akshat Prasad">
-<meta name="publisher" content="Akshat Prasad">
 
-<!-- ================= ACCESS & INTENT ================= -->
-<meta name="access-policy" content="iframe-only">
-<meta name="usage" content="open-inside-project">
-<meta name="visibility" content="private-ui">
-<meta name="indexing-policy" content="blocked">
-
-<!-- ================= RELATIONSHIP ================= -->
-<link rel="index" href="https://akshat-881236.github.io/sitemapjs/">
-<link rel="author" href="https://akshat-881236.github.io/sitemapjs/">
-
-<!-- ================= STYLE ================= -->
-<style>
-body{
-  margin:0;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-  background:#f8fafc;
-  color:#111827;
-}
-
-header{
-  background:#020617;
-  color:#fff;
-  padding:16px 20px;
-}
-
-main{
-  padding:20px;
-}
-
-footer{
-  padding:16px 20px;
-  font-size:13px;
-  color:#6b7280;
-  background:#f1f5f9;
-}
-
-.notice{
-  background:#fff7ed;
-  border-left:4px solid #f97316;
-  padding:14px;
-  border-radius:8px;
-  margin-bottom:20px;
-}
-
-.hidden{
-  display:none !important;
-}
-
-ul li{
-  margin:6px 0;
-}
-
-button{
-  padding:8px 14px;
-  border:none;
-  border-radius:6px;
-  background:#0f172a;
-  color:#fff;
-  cursor:pointer;
-}
-button:hover{
-  opacity:.9;
-}
-</style>
-
-<!-- ================= DEPENDENCY ================= -->
-<script src="https://akshat-881236.github.io/TrackerJS/tracker.js"></script>
-<script src="https://akshat-881236.github.io/TrackerJS/trackermeta.js"></script>
-<script src="https://akshat-881236.github.io/TrackerJS/index.js"></script>
-<script src="https://akshat-881236.github.io/TrackerJS/ui.js"></script>
-<script src="https://akshat-881236.github.io/sitemapjs/sitemapjs.min.js"></script>
+<!-- 🔐 IFRAME-ONLY ACCESS CONTROL -->
 <script>
 (function () {
-  const TRUSTED_ORIGINS = [
-    "https://akshat-881236.github.io"
-  ];
-
+  const TRUSTED_HOST = "akshat-881236.github.io";
   const isIframe = window.self !== window.top;
-  const referrer = document.referrer || "";
 
-  const trusted = TRUSTED_ORIGINS.some(origin =>
-    referrer.startsWith(origin)
-  );
+  let refHost = "";
+  try {
+    refHost = document.referrer
+      ? new URL(document.referrer).host
+      : "";
+  } catch {}
 
-  if (!isIframe || !trusted) {
+  const allowed =
+    isIframe &&
+    (refHost === TRUSTED_HOST || location.host === TRUSTED_HOST);
+
+  if (!allowed) {
     document.documentElement.innerHTML = `
       <div style="
         height:100vh;
@@ -114,22 +45,63 @@ button:hover{
       ">
         <div>
           <h2>TrackerJS</h2>
-          <p>
-            This dashboard is <b>not accessible directly</b>.
-          </p>
-          <p>
-            It works only when opened inside an authorized project.
-          </p>
+          <p><b>Embedded access only</b></p>
+          <p>This dashboard works only inside authorized projects.</p>
           <p style="opacity:.7;margin-top:12px">
             No cookies • No tracking • Local-only
           </p>
         </div>
       </div>
     `;
-    throw new Error("Direct access blocked");
+    throw new Error("TrackerJS blocked: direct access");
   }
 })();
 </script>
+
+<!-- ================= STYLES ================= -->
+<style>
+body{
+  margin:0;
+  font-family:system-ui,Segoe UI,Arial;
+  background:#f8fafc;
+  color:#111827;
+}
+header{
+  background:#020617;
+  color:#fff;
+  padding:16px 20px;
+}
+main{padding:20px;}
+footer{
+  padding:16px 20px;
+  font-size:13px;
+  color:#6b7280;
+  background:#f1f5f9;
+}
+.notice{
+  background:#fff7ed;
+  border-left:4px solid #f97316;
+  padding:14px;
+  border-radius:8px;
+  margin-bottom:20px;
+}
+ul li{margin:6px 0;}
+button{
+  padding:8px 14px;
+  border:none;
+  border-radius:6px;
+  background:#0f172a;
+  color:#fff;
+  cursor:pointer;
+}
+</style>
+
+<!-- ================= DEPENDENCIES ================= -->
+<script src="https://akshat-881236.github.io/TrackerJS/tracker.js"></script>
+<script src="https://akshat-881236.github.io/TrackerJS/trackermeta.js"></script>
+<script src="https://akshat-881236.github.io/TrackerJS/ui.js"></script>
+<script src="https://akshat-881236.github.io/TrackerJS/index.js"></script>
+
 </head>
 
 <body>
@@ -141,13 +113,13 @@ button:hover{
   </p>
 </header>
 
-<main id="app">
+<main>
 
   <div class="notice">
     <strong>Embedded Mode</strong>
     <p>
-      This dashboard works only when opened <b>inside an authorized project</b>.
-      It uses local browser storage and never sends data externally.
+      TrackerJS runs fully on your device.
+      No cookies, no analytics, no external tracking.
     </p>
   </div>
 
@@ -161,76 +133,44 @@ button:hover{
 </main>
 
 <footer>
-  TrackerJS · Client-side only · No cookies · No analytics · No tracking
+  TrackerJS · Client-side only · Privacy-first
 </footer>
 
 <script>
-/* ======================================================
-   HARD ACCESS CONTROL
-   ====================================================== */
+/* ================= RENDER HISTORY ================= */
 
-(function(){
+function renderHistory(){
+  const list = document.getElementById("history");
 
-  const TRUSTED_ORIGINS = [
-    "https://akshat-881236.github.io"
-  ];
-
-  const isIframe = window.self !== window.top;
-  const referrer = document.referrer || "";
-  const isTrustedOrigin = TRUSTED_ORIGINS.some(o => referrer.startsWith(o));
-
-  /* ---------- DIRECT ACCESS HANDLING ---------- */
-  if(!isIframe || !isTrustedOrigin){
-
-    alert(
-      "TrackerJS Dashboard Notice:\n\n" +
-      "This page is NOT meant to be opened directly.\n\n" +
-      "It works only when embedded inside an authorized project.\n\n" +
-      "No data is exposed, tracked, or shared.\n\n" +
-      "This window will now hide itself."
-    );
-
-    // Auto-hide UI
-    document.getElementById("app").classList.add("hidden");
-
-    // Optional: blank page after delay
-    setTimeout(() => {
-      document.body.innerHTML = "";
-    }, 3000);
-
+  if (!window.TrackerJS) {
+    list.innerHTML = "<li>Tracker engine unavailable.</li>";
     return;
   }
 
-  /* ---------- EMBEDDED MODE (SAFE) ---------- */
+  const data = TrackerJS.getHistory();
 
-  function render(){
-    const list = document.getElementById("history");
-
-    if(!window.TrackerJS){
-      list.innerHTML = "<li>Tracker engine unavailable.</li>";
-      return;
-    }
-
-    const data = TrackerJS.getHistory();
-
-    if(!data.length){
-      list.innerHTML = "<li>No visit history found.</li>";
-      return;
-    }
-
-    list.innerHTML = data.map(h =>
-      `<li><b>${h.project}</b> — <a href="${h.url}">${h.url}</a></li>`
-    ).join("");
+  if (!data.length) {
+    list.innerHTML = "<li>No visit history found.</li>";
+    return;
   }
 
-  window.clearHistory = function(){
-    TrackerJS.clearHistory();
-    render();
-  };
+  list.innerHTML = data.map(h => `
+    <li>
+      <b>${h.project}</b><br>
+      <a href="${h.url}" target="_top">${h.url}</a>
+      <small style="color:#6b7280">
+        (${new Date(h.timestamp).toLocaleString()})
+      </small>
+    </li>
+  `).join("");
+}
 
-  render();
+function clearHistory(){
+  TrackerJS.clearHistory();
+  renderHistory();
+}
 
-})();
+setTimeout(renderHistory, 300);
 </script>
 
 </body>
