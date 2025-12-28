@@ -82,6 +82,50 @@ button:hover{
 
 <!-- ================= DEPENDENCY ================= -->
 <script src="https://akshat-881236.github.io/TrackerJS//tracker.js"></script>
+<script>
+(function () {
+  const TRUSTED_ORIGINS = [
+    "https://akshat-881236.github.io"
+  ];
+
+  const isIframe = window.self !== window.top;
+  const referrer = document.referrer || "";
+
+  const trusted = TRUSTED_ORIGINS.some(origin =>
+    referrer.startsWith(origin)
+  );
+
+  if (!isIframe || !trusted) {
+    document.documentElement.innerHTML = `
+      <div style="
+        height:100vh;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:#020617;
+        color:#e5e7eb;
+        font-family:system-ui,Arial;
+        text-align:center;
+        padding:30px;
+      ">
+        <div>
+          <h2>TrackerJS</h2>
+          <p>
+            This dashboard is <b>not accessible directly</b>.
+          </p>
+          <p>
+            It works only when opened inside an authorized project.
+          </p>
+          <p style="opacity:.7;margin-top:12px">
+            No cookies • No tracking • Local-only
+          </p>
+        </div>
+      </div>
+    `;
+    throw new Error("Direct access blocked");
+  }
+})();
+</script>
 </head>
 
 <body>
