@@ -23,27 +23,45 @@
   const INTERNAL_PROJECTS = {
     "Portfolio-881236": {
       home: "https://akshat-881236.github.io/Portfolio-881236/",
-      logo: "https://akshat-881236.github.io/assets/portfolio-logo.png",
+      logo: "http://student.mdu.ac.in/Student_Biometrics/881238_Snap_10-4-2024_305%20AKSHAT%20P.jpg",
       title: "Personal Portfolio",
       description: "Academic profile, projects and system architecture by Akshat Prasad."
     },
     "Key-of-Success": {
       home: "https://akshat-881236.github.io/Key-of-Success/",
-      logo: "https://akshat-881236.github.io/assets/kos-logo.png",
+      logo: "https://akshat-881236.github.io/TrackerJS/Assets/KOSLogo.png",
       title: "Key of Success",
       description: "Academic Record & Performance Management System."
     },
     "Quizzone": {
       home: "https://akshat-881236.github.io/Quizzone/",
-      logo: "https://akshat-881236.github.io/assets/quizzone-logo.png",
+      logo: "https://akshat-881236.github.io/Quizzone/icons/icon-192.png",
       title: "Quizzone AI",
       description: "AI-powered learning and assessment platform."
     },
     "TrackerJS": {
       home: "https://akshat-881236.github.io/TrackerJS/",
-      logo: "https://akshat-881236.github.io/assets/trackerjs-logo.png",
+      logo: "http://student.mdu.ac.in/Student_Biometrics/881238_Snap_10-4-2024_305%20AKSHAT%20P.jpg",
       title: "TrackerJS",
       description: "Privacy-first visit memory & revisit assistant."
+    },
+    "LocalRepo": {
+      home: "https://akshat-881236.github.io/LocalRepo/",
+      logo: "http://student.mdu.ac.in/Student_Biometrics/881238_Snap_10-4-2024_305%20AKSHAT%20P.jpg",
+      title: "My Profile Dashboard",
+      description: "Personalized dashboard for quick access to profiles and resources."
+    },
+    "SitemapGeneratorXml": {
+      home: "https://akshat-881236.github.io/SitemapGeneratorXml/",
+      logo: "https://akshat-881236.github.io/TrackerJS/Assets/icon-128.png",
+      title: "Sitemap Generator XML",
+      description: "Automated XML sitemap creation tool for websites."
+    },
+    "sitemapjs": {
+      home: "https://akshat-881236.github.io/sitemapjs/",
+      logo: "https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png",
+      title: "Akshat Network Hub",
+      description: "Central hub for Akshat Project Network resources."
     }
   };
 
@@ -63,6 +81,31 @@
       title: "Wikipedia",
       logo: "https://www.wikipedia.org/static/favicon/wikipedia.ico",
       description: "Free online encyclopedia."
+    },
+    "github.com": {
+      title: "GitHub",
+      logo: "https://github.githubassets.com/favicons/favicon.png",
+      description: "Code hosting and collaboration platform."
+    },
+    "stackoverflow.com": {
+      title: "Stack Overflow",
+      logo: "https://cdn.sstatic.net/Sites/stackoverflow/img/favicon.ico",
+      description: "Programming Q&A and knowledge sharing community."
+    },
+    "mdu.ac.in": {
+      title: "MD University",
+      logo: "https://mdu.ac.in/favicon.ico",
+      description: "Official website of MD University."
+    },
+    "akshat-881236.github.io": {
+      title: "Akshat Project Network",
+      logo: "https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png",
+      description: "Official Akshat Project Network domains."
+    },
+    "linkedin.com": {
+      title: "LinkedIn",
+      logo: "https://static.licdn.com/scds/common/u/images/logos/favicons/v1/favicon.ico",
+      description: "Professional networking platform."
     }
   };
 
