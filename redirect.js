@@ -33,12 +33,6 @@
       title: "Key of Success",
       description: "Academic Record & Performance Management System."
     },
-    "Quizzone": {
-      home: "https://akshat-881236.github.io/Quizzone/",
-      logo: "https://akshat-881236.github.io/Quizzone/icons/icon-192.png",
-      title: "Quizzone AI",
-      description: "AI-powered learning and assessment platform."
-    },
     "TrackerJS": {
       home: "https://akshat-881236.github.io/TrackerJS/",
       logo: "http://student.mdu.ac.in/Student_Biometrics/881238_Snap_10-4-2024_305%20AKSHAT%20P.jpg",
