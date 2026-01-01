@@ -47,7 +47,7 @@
     },
     "SitemapGeneratorXml": {
       home: "https://akshat-881236.github.io/SitemapGeneratorXml/",
-      logo: "https://akshat-881236.github.io/TrackerJS/Assets/icon-128.png",
+      logo: "https://akshat-881236.github.io/SitemapGeneratorXml/Assets/icon-128.png",
       title: "Sitemap Generator XML",
       description: "Automated XML sitemap creation tool for websites."
     },
@@ -189,7 +189,7 @@
     document.body.insertAdjacentHTML("beforeend", `
       <div id="redirect-overlay">
         <div id="redirect-box">
-          <img src="${from.logo}">
+          <img src="https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png">
           <h1>Akshat Network</h1>
           <p>${from.description}</p>
 
@@ -233,7 +233,7 @@
     document.body.insertAdjacentHTML("beforeend", `
       <div id="redirect-overlay">
         <div id="redirect-box">
-          <img src="${from.logo}">
+          <img src="https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png">
           <h1>Akshat Project Network</h1>
           <p>${from.description}</p>
 
