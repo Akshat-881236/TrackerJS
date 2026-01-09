@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<!-- ================= BASIC META ================= -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Usage Manual | Akshat Network Hub</title>
+
+<meta name="description" content="Usage Manual for Akshat Network Hub projects. Learn how to navigate, use TrackerJS, manage local storage, and safely use all ANH tools and applications.">
+<meta name="keywords" content="Akshat Network Hub usage manual, ANH guide, TrackerJS manual, Akshat projects help">
+<meta name="author" content="Akshat Network Hub">
+<meta name="robots" content="index, follow">
+
+<link rel="canonical" href="https://akshat-881236.github.io/TrackerJS/usage-manual.htm">
+
+<!-- ================= OPEN GRAPH ================= -->
+<meta property="og:title" content="Usage Manual | Akshat Network Hub">
+<meta property="og:description" content="Official usage guide for Akshat Network Hub projects and tools.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://akshat-881236.github.io/TrackerJS/usage-manual.htm">
+<meta property="og:image" content="https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png">
+
+<!-- ================= TWITTER ================= -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Usage Manual | Akshat Network Hub">
+<meta name="twitter:description" content="How to use Akshat Network Hub projects safely and effectively.">
+<meta name="twitter:image" content="https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<!-- ================= STYLE (SAME SYSTEM) ================= -->
+<style>
+body{margin:0;font-family:system-ui,Segoe UI,sans-serif;background:#020617;color:#e5e7eb;}
+header{position:fixed;top:0;left:0;width:100%;background:#020617;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:15px;padding:10px 18px;z-index:1000;}
+header img{height:42px;}
+header .title h1{margin:0;font-size:18px;color:#38bdf8;}
+header .title p{margin:0;font-size:12px;color:#94a3b8;}
+.menu-btn{margin-left:auto;font-size:22px;cursor:pointer;}
+#sidebar{position:fixed;top:0;left:-280px;width:260px;height:100%;background:#020617;border-right:1px solid #1e293b;padding:80px 15px;transition:.35s;z-index:999;}
+#sidebar.active{left:0;}
+#sidebar h3{color:#38bdf8;font-size:14px;margin-top:20px;}
+#sidebar a{display:block;color:#e5e7eb;text-decoration:none;padding:8px 0;font-size:14px;}
+#sidebar a:hover{color:#38bdf8;}
+.swipe-hint{position:fixed;left:8px;bottom:80px;font-size:13px;color:#94a3b8;opacity:.6;}
+main{padding:110px 18px 80px;max-width:920px;margin:auto;}
+section{margin-bottom:60px;}
+section h2{color:#38bdf8;border-bottom:1px solid #1e293b;padding-bottom:6px;}
+section p, section li{line-height:1.7;color:#cbd5f5;}
+ul{padding-left:20px;}
+footer{border-top:1px solid #1e293b;padding:22px;text-align:center;}
+footer a{color:#94a3b8;margin:0 12px;font-size:18px;}
+footer a:hover{color:#38bdf8;}
+code{background:#020617;border:1px solid #1e293b;padding:2px 6px;border-radius:6px;}
+</style>
+
+</head>
+<script src="https://akshat-881236.github.io/sitemapjs/breadcrumb.js"></script>
+<script src="https://akshat-881236.github.io/TrackerJS/akshatnetworkhub.min.js"></script>
+<script src="https://akshat-881236.github.io/TrackerJS/tracker.js"></script>
+<script src="https://akshat-881236.github.io/TrackerJS/trackermeta.js"></script>
+<script src="https://akshat-881236.github.io/TrackerJS/ui.js"></script>
+<script src="https://akshat-881236.github.io/TrackerJS/index.js"></script>
+<script src="https://akshat-881236.github.io/TrackerJS/akshat-add-nav.js"></script>
+<body onload="pushData()">
+
+<!-- ================= HEADER ================= -->
+<header>
+  <img src="https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png">
+  <div class="title">
+    <h1>AKSHAT NETWORK HUB</h1>
+    <p>A centralized hub of all of Akshat Projects and Work</p>
+  </div>
+  <div class="menu-btn" onclick="toggleSidebar()">☰</div>
+</header>
+
+<!-- ================= SIDEBAR ================= -->
+<nav id="sidebar">
+  <h3>Manual Sections</h3>
+  <a href="#intro">Introduction</a>
+  <a href="#network">Network Boundary</a>
+  <a href="#navigation">Navigation System</a>
+  <a href="#tracker">TrackerJS</a>
+  <a href="#storage">Local Storage Usage</a>
+  <a href="#pwa">PWA & Offline Mode</a>
+  <a href="#redirect">Redirect Protection</a>
+  <a href="#developer">Developer Usage</a>
+  <a href="#safety">Safety Guidelines</a>
+
+  <h3>Policy Pages</h3>
+  <a href="privacy.htm">Privacy Policy</a>
+  <a href="terms.htm">Terms of Use</a>
+</nav>
+
+<div class="swipe-hint">👆 Swipe →</div>
+
+<!-- ================= MAIN ================= -->
+<main>
+
+<section id="intro">
+<h2>1. Introduction</h2>
+<p>
+This Usage Manual provides guidance on how to properly use
+projects hosted under Akshat Network Hub (ANH). It applies to
+all tools, web apps, demos, and experimental projects.
+</p>
+</section>
+
+<section id="network">
+<h2>2. Network Boundary & URL Prefix</h2>
+<p>
+All official ANH projects operate under the following URL prefix:
+</p>
+<p><code>https://akshat-881236.github.io/</code></p>
+<p>
+Pages outside this prefix are not governed by ANH policies unless
+explicitly stated.
+</p>
+</section>
+
+<section id="navigation">
+<h2>3. Navigation & UI System</h2>
+<ul>
+  <li>Swipe from left to right to open the navigation sidebar</li>
+  <li>Use the ☰ menu button on desktop</li>
+  <li>Sidebar links provide section-level navigation</li>
+</ul>
+</section>
+
+<section id="tracker">
+<h2>4. TrackerJS Ecosystem</h2>
+<p>
+TrackerJS is a client-side governance and analytics framework used
+across ANH projects.
+</p>
+<ul>
+  <li>No backend or cloud data transfer</li>
+  <li>Local event tracking only</li>
+  <li>Metadata injection for SEO consistency</li>
+</ul>
+<p>
+Related scripts include:
+<code>tracker.js</code>, <code>trackermeta.js</code>, <code>ui.js</code>
+</p>
+</section>
+
+<section id="storage">
+<h2>5. Local Storage & Data Control</h2>
+<p>
+Some projects store preferences or progress using browser
+LocalStorage.
+</p>
+<ul>
+  <li>No data leaves the user device</li>
+  <li>Users can clear data anytime</li>
+  <li>Use the Local Storage Manager for full control</li>
+</ul>
+</section>
+
+<section id="pwa">
+<h2>6. PWA & Offline Projects</h2>
+<p>
+Certain ANH projects support Progressive Web App (PWA) features.
+</p>
+<ul>
+  <li>Offline access via browser cache</li>
+  <li>No personal data stored in cache</li>
+  <li>Safe to uninstall anytime</li>
+</ul>
+</section>
+
+<section id="redirect">
+<h2>7. Redirect & Phishing Protection</h2>
+<p>
+ANH uses a redirect validation layer to prevent unsafe navigation.
+</p>
+<ul>
+  <li>All internal links are validated</li>
+  <li>Unexpected redirects are blocked</li>
+  <li>External links are user-initiated only</li>
+</ul>
+</section>
+
+<section id="developer">
+<h2>8. Developer Usage Guidelines</h2>
+<ul>
+  <li>Respect MIT license requirements</li>
+  <li>Provide attribution when reusing code</li>
+  <li>Do not remove policy or security layers</li>
+  <li>Fork responsibly for educational use</li>
+</ul>
+</section>
+
+<section id="safety">
+<h2>9. Safety & Responsible Use</h2>
+<p>
+Users and developers must not misuse ANH projects for harmful,
+illegal, or deceptive purposes.
+</p>
+<p>
+Report issues or concerns via official Network Hub channels.
+</p>
+</section>
+
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <a href="https://github.com/Akshat-881236"><i class="fab fa-github"></i></a>
+  <a href="https://linkedin.com/comm/mynetwork/discovery-see-all?usecase=PEOPLE_FOLLOWS&followMember=akshat-prasad-b53936379"><i class="fab fa-linkedin"></i></a>
+  <a href="https://x.com/akshatpsd2005"><i class="fab fa-x-twitter"></i></a>
+</footer>
+
+<!-- ================= JS ================= -->
+<script>
+const sidebar=document.getElementById("sidebar");
+function toggleSidebar(){sidebar.classList.toggle("active");}
+let startX=0;
+document.addEventListener("touchstart",e=>startX=e.touches[0].clientX);
+document.addEventListener("touchend",e=>{
+let endX=e.changedTouches[0].clientX;
+if(endX-startX>80)sidebar.classList.add("active");
+if(startX-endX>80)sidebar.classList.remove("active");
+});
+</script>
+
+</body>
+</html>

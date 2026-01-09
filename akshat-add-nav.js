@@ -2,19 +2,16 @@
  * identity-system-881236.js
  * Advanced Identity Management System for Akshat (ID: 881236)
  *
- * Features:
- * - keyword_db, breadcrumbs_db, notification_db (self-contained)
- * - Timed Visit Card (shows after 90,000ms if notifications enabled)
- * - Settings UI injected into the card via innerHTML
- * - Settings persist to localStorage and auto-reset to defaults after 3 hours
- * - Breadcrumb renderer with hover detail tooltip
- * - Unremovable brand card displayed when this script runs outside:
- *      host: akshat-881236.github.io
- *      path pattern: /{repo_name}/follow.htm
- * - Defensive re-attachment of brand card if removed (MutationObserver)
+ * Updated: notification system now supports multiple notifications (home + subpages)
+ * - notification_list: array of notification objects for project home pages and subpages
+ * - scheduleNotifications: triggers notifications in sequence after a base delay (VISIT_DELAY_MS)
+ *   with a configurable gap between them (NOTIFICATION_GAP_MS)
+ * - Notifications reuse the same Visit Card (updated per notification). If the user closes the card
+ *   (or sets 'Keep Visit Card Closed'), all scheduled future notifications are cancelled until
+ *   settings expiry (3 hours).
  *
- * Usage: Include this script in pages where you want the identity system to run.
- * Security note: This file performs innerHTML injection per design (settings UI).
+ * Usage: include this script as before. Exposed API: window.AkshatIdentity.scheduleNotifications(),
+ * window.AkshatIdentity.clearScheduledNotifications(), window.AkshatIdentity.setNotificationGap(ms)
  */
 
 (function () {
@@ -33,19 +30,19 @@
       urls: "https://akshat-881236.github.io/Portfolio-881236/, https://akshat-881236.github.io/LocalRepo/, https://akshat-881236.github.io/AkshatNetworkHub/"
     },
     {
-        keyword: "KOS",
-        description: "Academic Record Management System power by Akshat Network Hub",
-        urls: "https://akshat-881236.github.io/Key-of-Success/, https://akshat-881236.github.io/Key-of-Success/DMC.htm , https://akshat-881236.github.io/Key-of-Success/AttendanceMGMT.htm"
+      keyword: "KOS",
+      description: "Academic Record Management System power by Akshat Network Hub",
+      urls: "https://akshat-881236.github.io/Key-of-Success/, https://akshat-881236.github.io/Key-of-Success/DMC.htm , https://akshat-881236.github.io/Key-of-Success/AttendanceMGMT.htm"
     },
     {
-        keyword: "DPG Degree College BCA Student",
-        description: "I , Akshat Prasad , passionate student of Bachelor of Computer Application in DPG DEGREE COLLEGE.",
-        urls: "https://akshat-881236.github.io/Portfolio-881236/, https://akshat-881236.github.io/LocalRepo/, https://akshat-881236.github.io/AkshatNetworkHub/"
+      keyword: "DPG Degree College BCA Student",
+      description: "I , Akshat Prasad , passionate student of Bachelor of Computer Application in DPG DEGREE COLLEGE.",
+      urls: "https://akshat-881236.github.io/Portfolio-881236/, https://akshat-881236.github.io/LocalRepo/, https://akshat-881236.github.io/AkshatNetworkHub/"
     },
     {
-        keyword: "ANH",
-        description: "ANH , Akshat Network Hub is a centralized hub of all associated Akshat Projects.",
-        urls: "https://akshat-881236.github.io/Portfolio-881236/, https://akshat-881236.github.io/LocalRepo/, https://akshat-881236.github.io/AkshatNetworkHub/"
+      keyword: "ANH",
+      description: "ANH , Akshat Network Hub is a centralized hub of all associated Akshat Projects.",
+      urls: "https://akshat-881236.github.io/Portfolio-881236/, https://akshat-881236.github.io/LocalRepo/, https://akshat-881236.github.io/AkshatNetworkHub/"
     },
     {
       keyword: "Quizzone",
@@ -69,11 +66,65 @@
     { name: "Sitemap Generator", link: "https://akshat-881236.github.io/SitemapGeneratorXml/", detail: "Frontend-only PWA for generating XML, PDF, ZIP sitemaps and robots.txt with workspace management."}
   ];
 
-  const notification_db = {
-    title: "Akshat Network Hub",
-    description: "Akshat Network Hub is a centralized hub of all associated Akshat Projects.",
-    url: "https://akshat-881236.github.io/AkshatNetworkHub/"
-  };
+  // -------------------------
+  // Multiple notifications (home + subpages)
+  // -------------------------
+  // Each notification will be shown sequentially after VISIT_DELAY_MS with NOTIFICATION_GAP_MS between them.
+  // Add project home + important subpages here.
+  const notification_list = [
+    // Akshat Network Hub
+    {
+      title: "Akshat Network Hub",
+      description: "Central hub of Akshat projects — visit to explore the ecosystem.",
+      url: "https://akshat-881236.github.io/AkshatNetworkHub/"
+    },
+    // Portfolio
+    {
+      title: "Portfolio - Akshat Prasad",
+      description: "Personal portfolio: projects, resume, and contact.",
+      url: "https://akshat-881236.github.io/Portfolio-881236/"
+    },
+    // LocalRepo / Dashboard
+    {
+      title: "Akshat Dashboard",
+      description: "Personal dashboard and quick links.",
+      url: "https://akshat-881236.github.io/LocalRepo/"
+    },
+    // Key-of-Success home + subpages
+    {
+      title: "Key-of-Success (KOS)",
+      description: "Academic record management system by Akshat Network Hub.",
+      url: "https://akshat-881236.github.io/Key-of-Success/"
+    },
+    {
+      title: "KOS - DMC",
+      description: "Detailed Marks Certificate (DMC) viewer.",
+      url: "https://akshat-881236.github.io/Key-of-Success/DMC.htm"
+    },
+    {
+      title: "KOS - Attendance",
+      description: "Attendance management interface.",
+      url: "https://akshat-881236.github.io/Key-of-Success/AttendanceMGMT.htm"
+    },
+    // Quizzone home + AI subpage
+    {
+      title: "Quizzone",
+      description: "Take quizzes across multiple domains to test and learn.",
+      url: "https://akshat-881236.github.io/Quizzone/"
+    },
+    {
+      title: "Quizzone AI",
+      description: "AI-powered quizzes and adaptive question sets.",
+      url: "https://akshat-881236.github.io/Quizzone/Home/QuizzoneAI.htm"
+    },
+    // Sitemap Generator
+    {
+      title: "Sitemap Generator",
+      description: "Generate XML, PDF and ZIP sitemaps for your site (PWA).",
+      url: "https://akshat-881236.github.io/SitemapGeneratorXml/"
+    }
+  ];
+
   // -------------------------
   // Settings & Persistence
   // -------------------------
@@ -120,9 +171,9 @@
     // Re-render UI parts to reflect defaults
     const current = readSettings();
     applySettings(current.settings, /*persist=*/false);
-    // If visit card is open and defaults re-enable notifications, we may re-show it after configured delay
+    // If notifications are enabled and cardClosed reset, schedule notifications again
     if (current.settings.notifications && !current.settings.cardClosed) {
-      scheduleVisitCard();
+      scheduleNotifications();
     }
   }
 
@@ -293,31 +344,57 @@
   }
 
   // -------------------------
-  // Visit Card (timed 90s) + Settings injection
+  // Visit Card (timed sequence) + Settings injection
   // -------------------------
-  const VISIT_DELAY_MS = 90000; // 1.5 minutes
+  const VISIT_DELAY_MS = 90000; // 1.5 minutes base delay before first notification
+  let NOTIFICATION_GAP_MS = 30000; // default gap between notifications (30s) - configurable
+  let scheduledNotificationIds = []; // track timeouts for multiple notifications
   let visitTimeoutId = null;
 
-  function scheduleVisitCard() {
+  function scheduleNotifications() {
+    clearScheduledNotifications();
     const { settings } = readSettings();
-    if (!settings.notifications) return; // respect setting
-    if (settings.cardClosed) return; // user closed - respect until expiry
-    if (visitTimeoutId) clearTimeout(visitTimeoutId);
-    visitTimeoutId = setTimeout(() => {
-      renderVisitCard();
-    }, VISIT_DELAY_MS);
+    if (!settings.notifications) return;
+    if (settings.cardClosed) return;
+
+    notification_list.forEach((notif, idx) => {
+      const delay = VISIT_DELAY_MS + idx * NOTIFICATION_GAP_MS;
+      const id = setTimeout(() => {
+        // If settings have changed (closed/disabled) stop showing further notifications
+        const current = readSettings();
+        if (!current.settings.notifications || current.settings.cardClosed) {
+          clearScheduledNotifications();
+          return;
+        }
+        renderVisitCard(notif);
+      }, delay);
+      scheduledNotificationIds.push(id);
+    });
   }
 
-  function clearVisitSchedule() {
+  function clearScheduledNotifications() {
+    if (scheduledNotificationIds && scheduledNotificationIds.length) {
+      scheduledNotificationIds.forEach(id => clearTimeout(id));
+      scheduledNotificationIds = [];
+    }
     if (visitTimeoutId) {
       clearTimeout(visitTimeoutId);
       visitTimeoutId = null;
     }
   }
 
-  function renderVisitCard() {
-    // If card already present, do nothing
-    if (document.getElementById('identity-card-881236')) return;
+  function renderVisitCard(notification) {
+    // If card already present, update content to the new notification
+    const existing = document.getElementById('identity-card-881236');
+    if (existing) {
+      // If card was previously closed via settings, do not reopen
+      const current = readSettings();
+      if (current.settings.cardClosed) {
+        return;
+      }
+      updateCardContent(existing, notification);
+      return;
+    }
 
     const card = document.createElement('div');
     card.id = "identity-card-881236";
@@ -327,12 +404,12 @@
 
     card.innerHTML = `
       <div class="ak-card-top">
-        <strong>${escapeHtml(notification_db.title)}</strong>
+        <strong>${escapeHtml(notification.title)}</strong>
         <button class="ak-close-btn" aria-label="close">❌</button>
       </div>
-      <p style="font-size:12px; margin:0;">${escapeHtml(notification_db.description)}</p>
+      <p style="font-size:12px; margin:0;">${escapeHtml(notification.description)}</p>
       <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
-        <a class="ak-visit-link" href="${ensureHttp(notification_db.url)}" target="_blank" rel="noopener noreferrer">VISIT PAGE</a>
+        <a class="ak-visit-link" href="${ensureHttp(notification.url)}" target="_blank" rel="noopener noreferrer">VISIT PAGE</a>
         <a class="ak-settings-link" href="javascript:void(0)" id="ak-change-settings">Change Setting</a>
       </div>
     `;
@@ -346,11 +423,42 @@
       const current = readSettings();
       current.settings.cardClosed = true;
       saveSettings(current.settings);
+      clearScheduledNotifications();
     });
 
     const settingsLink = card.querySelector('#ak-change-settings');
     settingsLink.addEventListener('click', () => {
       // Inject settings UI into the existing card via innerHTML
+      injectSettingsPanel(card);
+    });
+  }
+
+  function updateCardContent(card, notification) {
+    // Update existing card's content to reflect a new notification.
+    // Preserve any event bindings by re-attaching needed click handlers.
+    card.innerHTML = `
+      <div class="ak-card-top">
+        <strong>${escapeHtml(notification.title)}</strong>
+        <button class="ak-close-btn" aria-label="close">❌</button>
+      </div>
+      <p style="font-size:12px; margin:0;">${escapeHtml(notification.description)}</p>
+      <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
+        <a class="ak-visit-link" href="${ensureHttp(notification.url)}" target="_blank" rel="noopener noreferrer">VISIT PAGE</a>
+        <a class="ak-settings-link" href="javascript:void(0)" id="ak-change-settings">Change Setting</a>
+      </div>
+    `;
+
+    const closeBtn = card.querySelector('.ak-close-btn');
+    closeBtn.addEventListener('click', () => {
+      card.remove();
+      const current = readSettings();
+      current.settings.cardClosed = true;
+      saveSettings(current.settings);
+      clearScheduledNotifications();
+    });
+
+    const settingsLink = card.querySelector('#ak-change-settings');
+    settingsLink.addEventListener('click', () => {
       injectSettingsPanel(card);
     });
   }
@@ -370,6 +478,9 @@
         <label><input type="checkbox" id="ak_set_cardclosed" ${settings.cardClosed ? "checked" : ""}> Keep Visit Card Closed</label>
         <button id="ak_settings_save">Update Identity</button>
         <button id="ak_settings_reset" style="margin-top:6px;">Reset to Defaults Now</button>
+        <div style="margin-top:8px; font-size:12px;">
+          <label>Notification gap (ms): <input id="ak_notification_gap" type="number" value="${NOTIFICATION_GAP_MS}" style="width:100%; box-sizing:border-box; margin-top:6px;" /></label>
+        </div>
       </div>
     `;
     // attach handlers (use DOM methods, not inline JS)
@@ -387,6 +498,10 @@
         seoTracking: !!document.getElementById('ak_set_seotrack').checked,
         cardClosed: !!document.getElementById('ak_set_cardclosed').checked
       };
+      const gapInput = document.getElementById('ak_notification_gap');
+      const parsedGap = Number(gapInput && gapInput.value) || NOTIFICATION_GAP_MS;
+      // persist gap in-memory (not part of settings TTL storage) but expose via API
+      NOTIFICATION_GAP_MS = Math.max(1000, Math.floor(parsedGap)); // minimum 1s gap
       saveSettings(newSettings);
       applySettings(newSettings, /*persist=*/false);
       // Re-render summary inside card
@@ -403,9 +518,11 @@
       `;
       card.querySelector('#ak_settings_close').addEventListener('click', () => card.remove());
       card.querySelector('#ak_settings_open').addEventListener('click', () => injectSettingsPanel(card));
-      // schedule visit card if notifications enabled and cardClosed not set
-      clearVisitSchedule();
-      if (newSettings.notifications && !newSettings.cardClosed) scheduleVisitCard();
+      // schedule or clear notifications based on new settings
+      clearScheduledNotifications();
+      if (newSettings.notifications && !newSettings.cardClosed) {
+        scheduleNotifications();
+      }
     });
 
     btnReset.addEventListener('click', () => {
@@ -413,6 +530,8 @@
       applySettings({ ...DEFAULT_SETTINGS }, /*persist=*/false);
       // reload UI to default
       injectSettingsPanel(card);
+      // reset gap to default
+      NOTIFICATION_GAP_MS = 30000;
     });
   }
 
@@ -461,7 +580,7 @@
     brand.className = 'ak-brand-card';
     brand.innerHTML = `
       <span>Power by Akshat Network Hub</span>
-      <a href="https://akshat-881236.github.io" target="_blank" rel="noopener noreferrer" title="Visit Akshat Network Hub">Visit Akshat Network Hub</a>
+      <a href="https://akshat-881236.github.io/AkshatNetworkHub/" target="_blank" rel="noopener noreferrer" title="Visit Akshat Network Hub">Visit Akshat Network Hub</a>
     `;
     // Make it intentionally hard to remove: no close button, high z-index. Also reattach on mutation.
     document.body.appendChild(brand);
@@ -517,9 +636,9 @@
       updateBreadcrumbs();
     }
 
-    // Schedule visit card if notifications enabled and user hasn't closed it
+    // Schedule notifications if enabled and not closed
     if (settings.notifications && !settings.cardClosed) {
-      scheduleVisitCard();
+      scheduleNotifications();
     }
 
     // Enforce brand card if not running from allowed path
@@ -532,10 +651,14 @@
       resetToDefaults: () => {
         localStorage.removeItem(STORAGE_KEY);
         applySettings({ ...DEFAULT_SETTINGS }, /*persist=*/false);
+        clearScheduledNotifications();
       },
       renderVisitCard,
       renderBrandCard: createBrandCard,
-      updateBreadcrumbs
+      updateBreadcrumbs,
+      scheduleNotifications,
+      clearScheduledNotifications,
+      setNotificationGap: (ms) => { NOTIFICATION_GAP_MS = Math.max(1000, Math.floor(ms)); }
     };
   }
 
@@ -545,8 +668,5 @@
   } else {
     init();
   }
-
-  // If script is injected into other pages, ensure Visit Card show schedule begins now if permitted.
-  // (already scheduled above in init)
 
 })();
