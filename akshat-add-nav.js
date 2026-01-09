@@ -558,115 +558,140 @@
   // -------------------------
   // Brand card enforcement (unremovable if script used outside allowed URL)
   // -------------------------
-  const BRAND_ID = 'akshat-brand-card';
-  function shouldShowBrand() {
-    try {
-      const host = "https://akshat-881236.github.io/"; // e.g. akshat-881236.github.io
-      const path = window.location.pathname || "/";
-      // allowed pattern: host must be akshat-881236.github.io and path like /{repo_name}/follow.htm
-      const allowedHost = "akshat-881236.github.io";
-      const allowedPathRegex = /^\/[^\/]+\/follow\.htm$/; // /repoName/follow.htm
-      if (host === allowedHost && allowedPathRegex.test(path)) return false;
-      return true;
-    } catch (e) {
-      return true;
+  // -------------------------
+// Brand card enforcement (show ONLY when outside allowed prefix)
+// -------------------------
+const BRAND_ID = 'akshat-brand-card';
+
+function shouldShowBrand() {
+  try {
+    const ALLOWED_PREFIX = "https://akshat-881236.github.io/";
+
+    // Real runtime values
+    const currentUrl = window.location.href;
+
+    // ❌ Inside Akshat Network → DO NOT show brand card
+    if (currentUrl.startsWith(ALLOWED_PREFIX)) {
+      return false;
     }
+
+    // ✅ Outside network → show brand card
+    return true;
+
+  } catch (e) {
+    // Fail-safe: show brand card
+    return true;
   }
+}
 
   function createBrandCard() {
-    if (document.getElementById(BRAND_ID)) return;
-    const brand = document.createElement('div');
-    brand.id = BRAND_ID;
-    brand.className = 'ak-brand-card';
-    brand.innerHTML = `
-      <span>Power by Akshat Network Hub</span>
-      <a href="https://akshat-881236.github.io/AkshatNetworkHub/" target="_blank" rel="noopener noreferrer" title="Visit Akshat Network Hub">Visit Akshat Network Hub</a>
-    `;
-    // Make it intentionally hard to remove: no close button, high z-index. Also reattach on mutation.
-    document.body.appendChild(brand);
-  }
+  if (document.getElementById(BRAND_ID)) return;
 
-  function observeAndProtectBrand() {
-    const observer = new MutationObserver((mutations) => {
-      const exists = document.getElementById(BRAND_ID);
-      if (!exists && shouldShowBrand()) {
-        // Recreate quickly
-        createBrandCard();
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: false });
-    // Also listen for removals via element removal
-    window.addEventListener('DOMContentLoaded', () => {
-      if (shouldShowBrand()) createBrandCard();
-    });
-    // Ensure immediate creation if needed
-    if (shouldShowBrand()) createBrandCard();
-  }
+  const brand = document.createElement('div');
+  brand.id = BRAND_ID;
+  brand.className = 'ak-brand-card';
+  brand.innerHTML = `
+    <span>Powered by Akshat Network Hub</span>
+    <a href="https://akshat-881236.github.io/AkshatNetworkHub/"
+       target="_blank"
+       rel="noopener noreferrer"
+       title="Visit Akshat Network Hub">
+       Visit Akshat Network Hub
+    </a>
+  `;
 
-  // -------------------------
-  // Utilities
-  // -------------------------
-  function ensureHttp(url) {
-    if (!url) return "#";
-    if (/^https?:\/\//i.test(url)) return url;
-    return "https://" + url;
-  }
+  document.body.appendChild(brand);
+}
 
-  // Minimal HTML-escape for text nodes we interpolate into innerHTML for safety
-  function escapeHtml(str) {
-    if (typeof str !== "string") return str;
-    return str.replace(/[&<>"']/g, function (m) {
-      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]);
-    });
-  }
-
-  // -------------------------
-  // Init flow
-  // -------------------------
-  function init() {
-    injectStyles();
-
-    // Apply settings (load persisted or defaults)
-    const { settings, expiresAt } = readSettings();
-    applySettings(settings, /*persist=*/false);
-    if (expiresAt) scheduleExpiry(enforceSettingsExpiry, expiresAt);
-
-    // Render/update breadcrumbs if visible and container exists
-    if (settings.breadcrumbsVisible) {
-      updateBreadcrumbs();
+function observeAndProtectBrand() {
+  const observer = new MutationObserver(() => {
+    if (!document.getElementById(BRAND_ID) && shouldShowBrand()) {
+      createBrandCard();
     }
+  });
 
-    // Schedule notifications if enabled and not closed
-    if (settings.notifications && !settings.cardClosed) {
-      scheduleNotifications();
+  observer.observe(document.body, {
+    childList: true,
+    subtree: false
+  });
+
+  // Initial enforcement (ONCE)
+  if (shouldShowBrand()) {
+    createBrandCard();
+  }
+}
+
+// -------------------------
+// Utilities
+// -------------------------
+function ensureHttp(url) {
+  if (!url) return "#";
+  if (/^https?:\/\//i.test(url)) return url;
+  return "https://" + url;
+}
+
+// Minimal HTML-escape for text nodes we interpolate into innerHTML for safety
+function escapeHtml(str) {
+  if (typeof str !== "string") return str;
+  return str.replace(/[&<>"']/g, function (m) {
+    return ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[m]);
+  });
+}
+
+// -------------------------
+// Init flow
+// -------------------------
+function init() {
+  injectStyles();
+
+  // Apply settings (load persisted or defaults)
+  const { settings, expiresAt } = readSettings();
+  applySettings(settings, /*persist=*/false);
+  if (expiresAt) scheduleExpiry(enforceSettingsExpiry, expiresAt);
+
+  // Render/update breadcrumbs if visible and container exists
+  if (settings.breadcrumbsVisible) {
+    updateBreadcrumbs();
+  }
+
+  // Schedule notifications if enabled and not closed
+  if (settings.notifications && !settings.cardClosed) {
+    scheduleNotifications();
+  }
+
+  // Enforce brand card if not running from allowed path
+  observeAndProtectBrand();
+
+  // Expose a minimal API for debugging / programmatic control
+  window.AkshatIdentity = {
+    readSettings,
+    saveSettings,
+    resetToDefaults: () => {
+      localStorage.removeItem(STORAGE_KEY);
+      applySettings({ ...DEFAULT_SETTINGS }, /*persist=*/false);
+      clearScheduledNotifications();
+    },
+    renderVisitCard,
+    renderBrandCard: createBrandCard,
+    updateBreadcrumbs,
+    scheduleNotifications,
+    clearScheduledNotifications,
+    setNotificationGap: (ms) => {
+      NOTIFICATION_GAP_MS = Math.max(1000, Math.floor(ms));
     }
+  };
+}
 
-    // Enforce brand card if not running from allowed path
-    observeAndProtectBrand();
-
-    // Expose a minimal API for debugging / programmatic control
-    window.AkshatIdentity = {
-      readSettings,
-      saveSettings,
-      resetToDefaults: () => {
-        localStorage.removeItem(STORAGE_KEY);
-        applySettings({ ...DEFAULT_SETTINGS }, /*persist=*/false);
-        clearScheduledNotifications();
-      },
-      renderVisitCard,
-      renderBrandCard: createBrandCard,
-      updateBreadcrumbs,
-      scheduleNotifications,
-      clearScheduledNotifications,
-      setNotificationGap: (ms) => { NOTIFICATION_GAP_MS = Math.max(1000, Math.floor(ms)); }
-    };
-  }
-
-  // start after DOM ready (to attach to breadcrumb container reliably)
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-
+// Start after DOM ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 })();
