@@ -561,7 +561,7 @@
   const BRAND_ID = 'akshat-brand-card';
   function shouldShowBrand() {
     try {
-      const host = window.location.host; // e.g. akshat-881236.github.io
+      const host = "https://akshat-881236.github.io/"; // e.g. akshat-881236.github.io
       const path = window.location.pathname || "/";
       // allowed pattern: host must be akshat-881236.github.io and path like /{repo_name}/follow.htm
       const allowedHost = "akshat-881236.github.io";
