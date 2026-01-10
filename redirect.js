@@ -100,6 +100,16 @@
       title: "LinkedIn",
       logo: "https://static.licdn.com/scds/common/u/images/logos/favicons/v1/favicon.ico",
       description: "Professional networking platform."
+    },
+    "https://chatgpt.com/g/g-69620f615cec8191ae44ab31140c7192-akshat-network-hub": {
+      title: "Chatgpt power Akshat Network Hub AI",
+      logo: "https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png",
+      description: "Chat with Akshat Network Hub in ChatGPT."
+    },
+    "https://x.com/": {
+      title: "Twitter",
+      logo: "https://abs.twimg.com/favicons/twitter.2.ico",
+      description: "Twitter is a popular social platform."
     }
   };
 
