@@ -106,10 +106,30 @@
       logo: "https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png",
       description: "Chat with Akshat Network Hub in ChatGPT."
     },
-    "https://x.com/": {
-      title: "Twitter",
+    "https://x.com/akshatpsd2005": {
+      title: "Twitter Profile - Akshat Prasad",
       logo: "https://abs.twimg.com/favicons/twitter.2.ico",
-      description: "Twitter is a popular social platform."
+      description: "View my Twitter Profile ."
+    },
+    "https://ik.imagekit.io/2412361999/Image-145609/in.gov.cbse-SSCER-171360312022.pdf?updatedAt=1764337480011": {
+      title: "Matriculation Marksheet - Akshat Prasad",
+      logo: "https://akshat-881236.github.io/TrackerJS/Assets/Cbse.jpeg",
+      description: "Digital Class 10th Marksheet of Akshat Prasad generated via Digilocker."
+    },
+    "https://ik.imagekit.io/2412361999/Image-145609/in.org.bseh-HSCER-30240779602024MARCH.pdf?updatedAt=1764337479998": {
+      title: "Intermediate Marksheet - Akshat Prasad",
+      logo: "https://akshat-881236.github.io/TrackerJS/Assets/Hbse.png",
+      description: "Digital Class 12th Marksheet of Akshat Prasad generated via Digilocker."
+    },
+    "https://ik.imagekit.io/2412361999/Image-145609/in.ac.mdurohtak-DGMST-610191220242412361999I.pdf?updatedAt=1764337480245": {
+      title: "BCA Semester 1 DMC - Akshat Prasad",
+      logo: "https://akshat-881236.github.io/TrackerJS/Assets/MDU_LOGO.jpg",
+      description: "Digital BCA Semester - 1 Marksheet of Akshat Prasad generated via Digilocker."
+    },
+    "https://www.instagram.com/its_akshat_881236/": {
+      title: "Instagram Profile - Akshat Prasad",
+      logo: "http://student.mdu.ac.in/Student_Biometrics/881238_Snap_10-4-2024_305%20AKSHAT%20P.jpg",
+      description: "View my Instagram Profile ."
     }
   };
 
