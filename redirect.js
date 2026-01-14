@@ -111,7 +111,7 @@
       logo: "https://abs.twimg.com/favicons/twitter.2.ico",
       description: "View my Twitter Profile ."
     },
-    "https://ik.imagekit.io/": {
+    "https://imagekit.io/": {
       title: "ImageKit - Where I upload all my Documents",
       logo: "https://akshat-881236.github.io/TrackerJS/Assets/Cbse.jpeg",
       description: "A digital wallet of all my document."
