@@ -14,7 +14,7 @@
     "itsakshatnetworkhub-881238.github.io"
   ];
 
-  const REDIRECT_DELAY = 3;
+  const REDIRECT_DELAY = 10;
 
   /* ================= TRUSTED EXTERNAL DB ================= */
 
