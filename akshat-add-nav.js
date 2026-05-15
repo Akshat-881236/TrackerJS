@@ -78,6 +78,12 @@
       description: "Central hub of Akshat projects — visit to explore the ecosystem.",
       url: "https://akshat-881236.github.io/AkshatNetworkHub/"
     },
+    // ANH AI Bot
+    {
+      title: "ANH AI Chatbot Project",
+      description: "A AI Chatbot project made by Akshat Prasad.",
+      url: "https://akshat-881236.github.io/AkshatNetworkHub/ai/index.htm"
+    },
     // Portfolio
     {
       title: "Portfolio - Akshat Prasad",
