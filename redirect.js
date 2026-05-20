@@ -65,7 +65,8 @@
     "mail.com": true,
     "whatsapp.com": true,
     "telegram.org": true,
-    "slack.com": true
+    "slack.com": true,
+    "web.app": true
   };
 
   /* ================= HELPERS ================= */
