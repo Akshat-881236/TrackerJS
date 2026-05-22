@@ -24,42 +24,76 @@ const MAX_ENTRIES = 50;
 const DUPLICATE_BLOCK_HOURS = 2;
 
 /*
-   Delay before popup appears
-*/
-const CARD_DELAY = 1200;
-
-/*
    Allowed secure domains
 */
 const TRUSTED_PREFIXES = [
+
 	"https://akshat-881236.github.io/",
 	"https://akshat-145609.github.io/",
-	"https://itsakshatnetworkhub-881238.github.io/"
+	"https://itsakshatnetworkhub-881238.github.io/",
+
+	/* DPG Notes FULL WEBSITE */
+	"https://dpgnotes.web.app/"
 ];
 
 /*
-   Exact secure URLs
+   Exact secure pages only
 */
 const TRUSTED_EXACT = [
-	"https://dpgnotes.web.app/"
+	/*
+	   Example:
+	   "https://example.com/page.html"
+	*/
 ];
 
 /* =========================================================
    UTIL
 ========================================================= */
 
+function normalizeURL(url) {
+
+	try {
+
+		/*
+		   Remove hash fragments
+		*/
+		url = url.split("#")[0];
+
+		/*
+		   Normalize trailing slash
+		*/
+		return url.replace(/\/+$/, "/");
+
+	} catch {
+
+		return url;
+	}
+}
+
 function isTrusted(url) {
 
+	url = normalizeURL(url);
+
+	/* PREFIX DOMAINS */
 	for (let i = 0; i < TRUSTED_PREFIXES.length; i++) {
 
-		if (url.startsWith(TRUSTED_PREFIXES[i])) {
+		let trustedPrefix =
+			normalizeURL(TRUSTED_PREFIXES[i]);
+
+		if (url.indexOf(trustedPrefix) === 0) {
+
 			return true;
 		}
 	}
 
+	/* EXACT PAGES */
 	for (let j = 0; j < TRUSTED_EXACT.length; j++) {
 
-		if (url === TRUSTED_EXACT[j]) {
+		let exact =
+			normalizeURL(TRUSTED_EXACT[j]);
+
+		if (url === exact) {
+
 			return true;
 		}
 	}
