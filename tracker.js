@@ -524,6 +524,41 @@ function buildRedirectURL(target) {
 }
 
 /* =========================================================
+   SAFE REDIRECT
+========================================================= */
+
+function redirectWithTracker(url){
+
+	try{
+
+		url =
+			buildRedirectURL(url);
+
+		REDIRECT_TARGET =
+			url;
+
+		window.location.href =
+			url;
+
+	}catch(err){
+
+		console.error(
+			"Tracker Redirect Error",
+			err
+		);
+
+		window.location.href =
+			url;
+	}
+}
+
+/*
+   Public API
+*/
+window.TrackerRedirect =
+	redirectWithTracker;
+
+/* =========================================================
    LINK INTERCEPTION
 ========================================================= */
 
@@ -571,16 +606,12 @@ document.addEventListener(
 );
 
 /* =========================================================
-   LOCATION.HREF PATCH
+   SAFE NAVIGATION INTERCEPTOR
 ========================================================= */
 
-(function patchLocation() {
+function redirectWithTracker(url){
 
-	const originalAssign =
-		window.location.assign;
-
-	window.location.assign =
-		function (url) {
+	try{
 
 		url =
 			buildRedirectURL(url);
@@ -588,14 +619,27 @@ document.addEventListener(
 		REDIRECT_TARGET =
 			url;
 
-		originalAssign.call(
-			window.location,
-			url
+		window.location.href =
+			url;
+
+	}catch(err){
+
+		console.error(
+			"Tracker Redirect Error",
+			err
 		);
-	};
 
-})();
+		window.location.href =
+			url;
+	}
+}
 
+/*
+   Public helper
+*/
+window.TrackerRedirect =
+	redirectWithTracker;
+	
 /* =========================================================
    DIAGNOSIS REPORT
 ========================================================= */
@@ -827,18 +871,24 @@ async function cleanupLogs() {
 
 window.TrackerJS = {
 
+	DB_NAME:
+		DB_NAME,
+
+	STORE_NAME:
+		STORE_NAME,
+
 	openDB,
 
 	storeLog,
 
 	getLogs:
-		async function () {
+		async function(){
 
 		const db =
 			await openDB();
 
 		return new Promise(
-			resolve => {
+			resolve=>{
 
 			const tx =
 				db.transaction(
@@ -855,7 +905,7 @@ window.TrackerJS = {
 				store.getAll();
 
 			request.onsuccess =
-				function () {
+				function(){
 
 				resolve(
 					request.result || []
@@ -864,8 +914,58 @@ window.TrackerJS = {
 		});
 	},
 
+	getLogById:
+		async function(id){
+
+		const db =
+			await openDB();
+
+		return new Promise(
+			resolve=>{
+
+			const tx =
+				db.transaction(
+					STORE_NAME,
+					"readonly"
+				);
+
+			const store =
+				tx.objectStore(
+					STORE_NAME
+				);
+
+			const request =
+				store.get(id);
+
+			request.onsuccess =
+				function(){
+
+				resolve(
+					request.result || null
+				);
+			};
+		});
+	},
+
+	deleteLog:
+		async function(id){
+
+		const db =
+			await openDB();
+
+		const tx =
+			db.transaction(
+				STORE_NAME,
+				"readwrite"
+			);
+
+		tx.objectStore(
+			STORE_NAME
+		).delete(id);
+	},
+
 	clearLogs:
-		async function () {
+		async function(){
 
 		const db =
 			await openDB();
@@ -881,20 +981,3 @@ window.TrackerJS = {
 		).clear();
 	}
 };
-
-/* =========================================================
-   START
-========================================================= */
-
-window.addEventListener(
-	"load",
-	function () {
-
-		setTimeout(
-			storeLog,
-			1000
-		);
-	}
-);
-
-})(window);
