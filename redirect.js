@@ -19,55 +19,142 @@
   /* ================= TRUSTED EXTERNAL DB ================= */
 
   const EXTERNAL_DB = {
-    "github.com": true,
-    "linkedin.com": true,
-    "x.com": true,
-    "instagram.com": true,
-    "google.com": true,
-    "youtube.com": true,
-    "twitter.com": true,
-    "facebook.com": true,
-    "stackoverflow.com": true,
-    "medium.com": true,
-    "dev.to": true,
-    "hashnode.com": true,
-    "codepen.io": true,
-    "replit.com": true,
-    "glitch.com": true,
-    "netlify.com": true,
-    "vercel.com": true,
-    "heroku.com": true,
-    "aws.amazon.com": true,
-    "azure.microsoft.com": true,
-    "cloud.google.com": true,
-    "digitalocean.com": true,
-    "github.io": true,
-    "gitlab.com": true,
-    "bitbucket.org": true,
-    "npmjs.com": true,
-    "yarnpkg.com": true,
-    "wikipedia.org": true,
-    "quora.com": true,
-    "asana.com": true,
-    "brevo.com": true,
-    "youtube.com": true,
-    "dailymotion.com": true,
-    "spotify.com": true,
-    "soundcloud.com": true,
-    "netflix.com": true,
-    "amazon.com": true,
-    "ebay.com": true,
-    "etsy.com": true,
-    "imagekit.io": true,
-    "cloudinary.com": true,
-    "unsplash.com": true,
-    "email.com": true,
-    "mail.com": true,
-    "whatsapp.com": true,
-    "telegram.org": true,
-    "slack.com": true,
-    "web.app": true
-  };
+
+  /* =====================================
+     SOURCE CONTROL / DEV
+  ===================================== */
+
+  "github.com": true,
+  "github.io": true,
+  "githubusercontent.com": true,
+  "gitlab.com": true,
+  "bitbucket.org": true,
+
+  /* =====================================
+     SOCIAL / COMMUNITY
+  ===================================== */
+
+  "linkedin.com": true,
+  "x.com": true,
+  "twitter.com": true,
+  "instagram.com": true,
+  "facebook.com": true,
+  "threads.net": true,
+  "reddit.com": true,
+  "discord.com": true,
+  "discord.gg": true,
+  "telegram.org": true,
+  "whatsapp.com": true,
+  "snapchat.com": true,
+  "tiktok.com": true,
+  "pinterest.com": true,
+  "quora.com": true,
+  "email.com": true,
+  "mail.com": true,
+
+  /* =====================================
+     VIDEO / MEDIA
+  ===================================== */
+
+  "youtube.com": true,
+  "youtu.be": true,
+  "dailymotion.com": true,
+  "spotify.com": true,
+  "soundcloud.com": true,
+
+  /* =====================================
+     BLOGGING / LEARNING
+  ===================================== */
+
+  "medium.com": true,
+  "dev.to": true,
+  "hashnode.com": true,
+  "freecodecamp.org": true,
+  "geeksforgeeks.org": true,
+  "w3schools.com": true,
+  "developer.mozilla.org": true,
+  "wikipedia.org": true,
+
+  /* =====================================
+     CODE / PLAYGROUND
+  ===================================== */
+
+  "codepen.io": true,
+  "codesandbox.io": true,
+  "stackblitz.com": true,
+  "replit.com": true,
+  "glitch.com": true,
+
+  /* =====================================
+     HOSTING / CLOUD
+  ===================================== */
+
+  "netlify.app": true,
+  "netlify.com": true,
+
+  "vercel.app": true,
+  "vercel.com": true,
+
+  "web.app": true,
+  "firebaseapp.com": true,
+
+  "pages.dev": true,
+  "workers.dev": true,
+  "cloudflare.com": true,
+
+  "render.com": true,
+  "railway.app": true,
+  "surge.sh": true,
+
+  "herokuapp.com": true,
+  "heroku.com": true,
+
+  "aws.amazon.com": true,
+  "azure.microsoft.com": true,
+  "cloud.google.com": true,
+  "digitalocean.com": true,
+
+  /* =====================================
+     PACKAGE / CDN
+  ===================================== */
+
+  "npmjs.com": true,
+  "yarnpkg.com": true,
+  "jsdelivr.net": true,
+  "unpkg.com": true,
+
+  /* =====================================
+     AI / ML
+  ===================================== */
+
+  "openai.com": true,
+  "huggingface.co": true,
+
+  /* =====================================
+     DESIGN / PRODUCTIVITY
+  ===================================== */
+
+  "figma.com": true,
+  "canva.com": true,
+  "notion.so": true,
+  "slack.com": true,
+
+  /* =====================================
+     IMAGE / CDN
+  ===================================== */
+
+  "imagekit.io": true,
+  "cloudinary.com": true,
+  "unsplash.com": true,
+  "imgbb.com": true,
+  "postimg.cc": true,
+
+  /* =====================================
+     SEARCH / GENERAL
+  ===================================== */
+
+  "google.com": true
+};
 
   /* ================= HELPERS ================= */
 
