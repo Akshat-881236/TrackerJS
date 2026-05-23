@@ -569,23 +569,121 @@
 // -------------------------
 const BRAND_ID = 'akshat-brand-card';
 
-function shouldShowBrand() {
+/* -------------------------
+   TRUST SYSTEM
+------------------------- */
+
+const TRUSTED_PREFIXES = [
+
+  "https://akshat-881236.github.io/",
+  "https://akshat-145609.github.io/",
+  "https://itsakshatnetworkhub-881238.github.io/",
+
+  /* Full DPG Notes website */
+  "https://dpgnotes.web.app/"
+];
+
+/*
+   Exact secure pages only
+*/
+const TRUSTED_EXACT_URLS = [
+
+  /*
+     Example:
+     "https://example.com/page.html"
+  */
+];
+
+/* -------------------------
+   URL NORMALIZER
+------------------------- */
+
+function normalizeURL(url) {
+
   try {
-    const ALLOWED_PREFIX = "https://akshat-881236.github.io/";
 
-    // Real runtime values
-    const currentUrl = window.location.href;
+    /*
+       Remove hash fragments
+    */
+    url = url.split("#")[0];
 
-    // ❌ Inside Akshat Network → DO NOT show brand card
-    if (currentUrl.startsWith(ALLOWED_PREFIX)) {
+    /*
+       Normalize trailing slash
+    */
+    return url.replace(/\/+$/, "/");
+
+  } catch (e) {
+
+    return url;
+  }
+}
+
+/* -------------------------
+   TRUST VALIDATION
+------------------------- */
+
+function isTrustedURL(url) {
+
+  url = normalizeURL(url);
+
+  /* PREFIX VALIDATION */
+  for (let i = 0; i < TRUSTED_PREFIXES.length; i++) {
+
+    const trustedPrefix =
+      normalizeURL(TRUSTED_PREFIXES[i]);
+
+    if (url.indexOf(trustedPrefix) === 0) {
+
+      return true;
+    }
+  }
+
+  /* EXACT URL VALIDATION */
+  for (let j = 0; j < TRUSTED_EXACT_URLS.length; j++) {
+
+    const exact =
+      normalizeURL(TRUSTED_EXACT_URLS[j]);
+
+    if (url === exact) {
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/* -------------------------
+   Brand Card Logic
+------------------------- */
+
+function shouldShowBrand() {
+
+  try {
+
+    const currentUrl =
+      window.location.href;
+
+    /*
+       Trusted site
+       -> hide brand card
+    */
+    if (isTrustedURL(currentUrl)) {
+
       return false;
     }
 
-    // ✅ Outside network → show brand card
+    /*
+       External site
+       -> show brand card
+    */
     return true;
 
   } catch (e) {
-    // Fail-safe: show brand card
+
+    /*
+       Fail-safe
+    */
     return true;
   }
 }
