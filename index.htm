@@ -744,12 +744,41 @@ async function loadLogs(){
 
 	if(!window.TrackerJS){
 
-		alert(
-			"TrackerJS Missing"
-		);
+	document
+	.getElementById(
+		"logs-container"
+	)
+	.innerHTML = `
 
-		return;
-	}
+	<div class="
+	bg-red-500/10
+	border
+	border-red-500
+	text-red-300
+	p-6
+	rounded-3xl">
+
+		<h2 class="
+		text-2xl
+		font-bold
+		mb-3">
+
+			TrackerJS Missing
+
+		</h2>
+
+		<p>
+
+			tracker.js failed to load
+			or crashed before API export.
+
+		</p>
+
+	</div>
+	`;
+
+	return;
+}
 
 	const logs =
 		await TrackerJS.getLogs();
@@ -1205,19 +1234,8 @@ async function testLiveURL(id){
 
 async function deleteLog(id){
 
-	const db =
-		await TrackerJS.openDB();
-
-	const tx =
-		db.transaction(
-			"logs",
-			"readwrite"
-		);
-
-	tx.objectStore(
-		"logs"
-	)
-	.delete(id);
+	await TrackerJS
+	.deleteLog(id);
 
 	loadLogs();
 }
@@ -1261,6 +1279,47 @@ function escapeHTML(str){
 /* =====================================================
    START
 ===================================================== */
+
+/* =====================================================
+   STARTUP
+===================================================== */
+
+window.addEventListener(
+	"load",
+	async function(){
+
+	try{
+
+		if(
+			!window.TrackerJS
+		){
+
+			throw new Error(
+				"TrackerJS Missing"
+			);
+		}
+
+		console.log(
+			"TrackerJS Loaded"
+		);
+
+		console.log(
+			"DB:",
+			TrackerJS.DB_NAME
+		);
+
+		await loadLogs();
+
+		await loadCurrentDiagnose();
+
+	}catch(err){
+
+		console.error(
+			"Dashboard Startup Error",
+			err
+		);
+	}
+});
 
 loadLogs();
 
