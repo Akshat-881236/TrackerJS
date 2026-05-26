@@ -579,8 +579,10 @@ const TRUSTED_PREFIXES = [
   "https://akshat-145609.github.io/",
   "https://itsakshatnetworkhub-881238.github.io/",
 
-  /* Full DPG Notes website */
-  "https://dpgnotes.web.app/"
+  /* Full DPG Notes and ANH Dashboard website */
+  "https://dpgnotes.web.app/",
+  "https://anh-dashboard-881238.web.app/",
+  "https://anh-dashboard-881238.web.app/admin.html"
 ];
 
 /*
