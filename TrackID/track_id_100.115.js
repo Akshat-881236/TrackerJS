@@ -822,21 +822,22 @@
         }
 
         .anh-offline-runtime {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(135deg, #0a0e27 0%, #1a0e35 100%);
-          z-index: 999998;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow-y: auto;
-          padding: 20px;
-          animation: fadeIn 0.3s ease-out;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #0a0e27 0%, #1a0e35 100%);
+        z-index: 999998;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow-y: auto;           /* ✓ Already here, but ensure it's present */
+        overflow-x: hidden;          /* ✓ Add this to prevent horizontal scroll */
+        padding: 20px;
+        animation: fadeIn 0.3s ease-out;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
 
         @keyframes fadeIn {
           from { opacity: 0; }
@@ -844,23 +845,27 @@
         }
 
         .anh-offline-wrapper {
-          width: 100%;
-          display: flex;
-          justify-content: center;
-        }
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;     /* ✓ Change from 'center' to 'flex-start' */
+        min-height: auto;             /* ✓ Add this */
+      }
 
         .anh-offline-card {
-          background: rgba(20, 20, 40, 0.98);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(102, 126, 234, 0.4);
-          border-radius: 20px;
-          padding: 32px;
-          max-width: 700px;
-          width: 100%;
-          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6),
-                      inset 0 1px 0 rgba(255, 255, 255, 0.1);
-          color: #e0e0e0;
-        }
+        background: rgba(20, 20, 40, 0.98);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(102, 126, 234, 0.4);
+        border-radius: 20px;
+        padding: 32px;
+        max-width: 700px;
+        width: 100%;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        color: #e0e0e0;
+        /* Remove or comment out any fixed height if present */
+        /* height: auto; - ensure this is set, not a fixed value */
+      }
 
         /* Header */
         .anh-offline-header {
