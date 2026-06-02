@@ -1196,12 +1196,13 @@
           '@context': 'https://schema.org',
           '@type': 'Organization',
           name: 'Akshat Network Hub',
-          url: 'https://akshat-881236.github.io',
-          logo: 'https://akshat-881236.github.io/logo.png',
+          url: 'https://akshat-881236.github.io/AkshatNetworkHub/',
+          logo: 'https://akshat-881236.github.io/TrackerJS/Assets/AKNH/icon-192.png',
           description: 'Educational tools and portfolio ecosystem',
           sameAs: [
             'https://github.com/Akshat-881236',
-            'https://linkedin.com/in/akshat-prasad'
+            'https://linkedin.com/in/akshat-network-hub',
+            'https://www.linkedin.com/in/akshat-prasad-anh/'
           ]
         };
 
