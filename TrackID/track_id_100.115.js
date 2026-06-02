@@ -12,7 +12,7 @@
  * 
  * Architecture: Pure client-side, Canvas-based, Memory-optimized
  * 
- * @version 1.0.0
+ * @version 2.0.0
  * @author ANH Offline Team
  * @license MIT
  */
@@ -37,7 +37,7 @@
     GRAVITY: 0.6,
     PLAYER_SPEED: 5,
     OBSTACLE_SPEED: 4,
-    SPAWN_RATE: 60, // Frames between obstacle spawns
+    SPAWN_RATE: 60,
     INITIAL_DIFFICULTY: 1,
     DIFFICULTY_INCREMENT: 0.0005
   };
@@ -46,24 +46,15 @@
   // 2. UTILITY FUNCTIONS
   // ============================================================================
 
-  /**
-   * Safe logging
-   */
   function log(message, data = null) {
     const timestamp = new Date().toLocaleTimeString();
     console.log(`[ANH Offline ${timestamp}] ${message}`, data || '');
   }
 
-  /**
-   * Safe error logging
-   */
   function logError(message, error = null) {
     console.error(`[ANH Offline ERROR] ${message}`, error || '');
   }
 
-  /**
-   * Gets local storage value
-   */
   function getStorage(key, defaultValue = null) {
     try {
       const value = localStorage.getItem(key);
@@ -73,9 +64,6 @@
     }
   }
 
-  /**
-   * Sets local storage value
-   */
   function setStorage(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
@@ -86,37 +74,22 @@
     }
   }
 
-  /**
-   * Checks if online
-   */
   function isOnline() {
     return navigator.onLine;
   }
 
-  /**
-   * Delays execution
-   */
   function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  /**
-   * Clamps value between min and max
-   */
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
   }
 
-  /**
-   * Random integer between min and max
-   */
   function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  /**
-   * Removes element safely
-   */
   function removeElement(el) {
     if (el && el.parentNode) {
       el.parentNode.removeChild(el);
@@ -134,14 +107,10 @@
       this.reconnectTimer = null;
     }
 
-    /**
-     * Initializes offline detection
-     */
     initialize() {
       window.addEventListener('online', () => this._handleOnline());
       window.addEventListener('offline', () => this._handleOffline());
 
-      // Periodic connectivity check via fetch
       this.connectivityCheckInterval = setInterval(() => {
         this._checkConnectivity();
       }, CONFIG.RECONNECT_CHECK_INTERVAL);
@@ -153,9 +122,6 @@
       log('Offline detection engine initialized');
     }
 
-    /**
-     * Handles going offline
-     */
     _handleOffline() {
       if (!this.isOffline) {
         this.isOffline = true;
@@ -164,9 +130,6 @@
       }
     }
 
-    /**
-     * Handles coming back online
-     */
     _handleOnline() {
       if (this.isOffline) {
         this.isOffline = false;
@@ -175,9 +138,6 @@
       }
     }
 
-    /**
-     * Checks connectivity via silent fetch
-     */
     _checkConnectivity() {
       if (isOnline()) {
         this._handleOnline();
@@ -186,24 +146,15 @@
       }
     }
 
-    /**
-     * Gets offline duration in milliseconds
-     */
     getOfflineDuration() {
       if (!this.isOffline) return 0;
       return Date.now() - (this.offlineStartTime || Date.now());
     }
 
-    /**
-     * Checks if should show game
-     */
     shouldShowGame() {
       return this.isOffline && this.getOfflineDuration() > CONFIG.OFFLINE_TIMEOUT;
     }
 
-    /**
-     * Cleanup
-     */
     destroy() {
       if (this.connectivityCheckInterval) {
         clearInterval(this.connectivityCheckInterval);
@@ -228,7 +179,6 @@
       this.lastFrameTime = 0;
       this.animationFrameId = null;
 
-      // Game objects
       this.player = {
         x: CONFIG.GAME_WIDTH / 2 - 15,
         y: CONFIG.GAME_HEIGHT - 80,
@@ -241,27 +191,18 @@
       this.obstacles = [];
       this.particles = [];
       this.collectedItems = 0;
-
-      // Input
       this.keys = {};
       this.touches = {};
     }
 
-    /**
-     * Initializes canvas and context
-     */
     initializeCanvas(canvasElement) {
       this.canvas = canvasElement;
       this.ctx = this.canvas.getContext('2d', { alpha: false });
 
-      // Set canvas size
       this._resizeCanvas();
       window.addEventListener('resize', () => this._resizeCanvas());
     }
 
-    /**
-     * Resizes canvas to fit container
-     */
     _resizeCanvas() {
       const container = this.canvas.parentElement;
       const width = Math.min(CONFIG.GAME_WIDTH, container.clientWidth - 20);
@@ -271,14 +212,10 @@
       this.canvas.width = width;
       this.canvas.height = height;
 
-      // Store scale factor
       this.scaleX = width / CONFIG.GAME_WIDTH;
       this.scaleY = height / CONFIG.GAME_HEIGHT;
     }
 
-    /**
-     * Starts the game
-     */
     start() {
       this.gameRunning = true;
       this.gamePaused = false;
@@ -288,8 +225,8 @@
       this.obstacles = [];
       this.particles = [];
       this.collectedItems = 0;
+      this.gameStartTime = Date.now();
 
-      // Reset player position
       this.player.x = CONFIG.GAME_WIDTH / 2 - 15;
       this.player.y = CONFIG.GAME_HEIGHT - 80;
       this.player.velocityX = 0;
@@ -301,9 +238,6 @@
       log('Game started');
     }
 
-    /**
-     * Stops the game
-     */
     stop() {
       this.gameRunning = false;
       if (this.animationFrameId) {
@@ -312,16 +246,10 @@
       this._detachInputHandlers();
     }
 
-    /**
-     * Pauses the game
-     */
     pause() {
       this.gamePaused = !this.gamePaused;
     }
 
-    /**
-     * Main game loop
-     */
     _gameLoop() {
       const now = performance.now();
       const deltaTime = now - this.lastFrameTime;
@@ -339,75 +267,52 @@
       }
     }
 
-    /**
-     * Updates game state
-     */
     update(deltaTime) {
       this.frameCount++;
 
-      // Update player
       this._updatePlayer();
 
-      // Spawn obstacles
       if (this.frameCount % Math.max(30, CONFIG.SPAWN_RATE - Math.floor(this.difficulty * 10)) === 0) {
         this._spawnObstacle();
       }
 
-      // Update obstacles
       this._updateObstacles();
-
-      // Update particles
       this._updateParticles();
-
-      // Check collisions
       this._checkCollisions();
 
-      // Increase difficulty
       this.difficulty += CONFIG.DIFFICULTY_INCREMENT;
 
-      // Check game over
       if (this.player.y + this.player.height > CONFIG.GAME_HEIGHT) {
         this._gameOver();
       }
     }
 
-    /**
-     * Updates player position and physics
-     */
     _updatePlayer() {
-      // Handle keyboard input
       if (this.keys['ArrowLeft'] || this.keys['a']) {
         this.player.velocityX = -CONFIG.PLAYER_SPEED;
       } else if (this.keys['ArrowRight'] || this.keys['d']) {
         this.player.velocityX = CONFIG.PLAYER_SPEED;
       } else {
-        this.player.velocityX *= 0.9; // Friction
+        this.player.velocityX *= 0.9;
       }
 
-      // Apply gravity
       this.player.velocityY += CONFIG.GRAVITY;
 
-      // Update position
       this.player.x += this.player.velocityX;
       this.player.y += this.player.velocityY;
 
-      // Boundary checks
       this.player.x = clamp(
         this.player.x,
         0,
         CONFIG.GAME_WIDTH - this.player.width
       );
 
-      // Ground collision
       if (this.player.y + this.player.height >= CONFIG.GAME_HEIGHT - 20) {
         this.player.y = CONFIG.GAME_HEIGHT - 20 - this.player.height;
         this.player.velocityY = 0;
       }
     }
 
-    /**
-     * Spawns obstacle
-     */
     _spawnObstacle() {
       const type = Math.random() > 0.3 ? 'spike' : 'coin';
       const obstacle = {
@@ -423,26 +328,19 @@
       this.obstacles.push(obstacle);
     }
 
-    /**
-     * Updates obstacles
-     */
     _updateObstacles() {
       this.obstacles.forEach((obstacle, index) => {
         obstacle.y += obstacle.velocityY;
 
-        // Remove if off-screen
         if (obstacle.y > CONFIG.GAME_HEIGHT) {
           this.obstacles.splice(index, 1);
           if (obstacle.type === 'spike') {
-            this.score += 10; // Bonus for dodging
+            this.score += 10;
           }
         }
       });
     }
 
-    /**
-     * Updates particles
-     */
     _updateParticles() {
       this.particles = this.particles.filter(particle => {
         particle.x += particle.velocityX;
@@ -453,9 +351,6 @@
       });
     }
 
-    /**
-     * Checks collisions
-     */
     _checkCollisions() {
       this.obstacles.forEach((obstacle, index) => {
         if (this._isColliding(this.player, obstacle)) {
@@ -471,9 +366,6 @@
       });
     }
 
-    /**
-     * Collision detection
-     */
     _isColliding(rect1, rect2) {
       return rect1.x < rect2.x + rect2.width &&
              rect1.x + rect1.width > rect2.x &&
@@ -481,15 +373,11 @@
              rect1.y + rect1.height > rect2.y;
     }
 
-    /**
-     * Handles coin collection
-     */
     _collectCoin(coin) {
       this.score += 25;
       this.collectedItems++;
       coin.collected = true;
 
-      // Create particles
       for (let i = 0; i < 5; i++) {
         this.particles.push({
           x: coin.x,
@@ -502,19 +390,14 @@
       }
     }
 
-    /**
-     * Game over handler
-     */
     _gameOver() {
       this.gameRunning = false;
 
-      // Update high score
       if (this.score > this.highScore) {
         this.highScore = this.score;
         setStorage(CONFIG.STORAGE_KEY_HIGH_SCORE, this.highScore);
       }
 
-      // Store stats
       const stats = getStorage(CONFIG.STORAGE_KEY_STATS, {
         gamesPlayed: 0,
         totalScore: 0,
@@ -530,41 +413,23 @@
       log('Game over', { score: this.score, highScore: this.highScore });
     }
 
-    /**
-     * Renders game
-     */
     render() {
-      // Clear canvas
       this.ctx.fillStyle = '#0a0e27';
       this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-      // Apply scale
       this.ctx.save();
       this.ctx.scale(this.scaleX, this.scaleY);
 
-      // Draw background
       this._drawBackground();
-
-      // Draw player
       this._drawPlayer();
-
-      // Draw obstacles
       this._drawObstacles();
-
-      // Draw particles
       this._drawParticles();
-
-      // Draw UI
       this._drawUI();
 
       this.ctx.restore();
     }
 
-    /**
-     * Draws background
-     */
     _drawBackground() {
-      // Grid effect
       this.ctx.strokeStyle = 'rgba(102, 126, 234, 0.1)';
       this.ctx.lineWidth = 1;
 
@@ -582,16 +447,11 @@
         this.ctx.stroke();
       }
 
-      // Ground
       this.ctx.fillStyle = '#667eea';
       this.ctx.fillRect(0, CONFIG.GAME_HEIGHT - 20, CONFIG.GAME_WIDTH, 20);
     }
 
-    /**
-     * Draws player
-     */
     _drawPlayer() {
-      // Player body
       this.ctx.fillStyle = '#764ba2';
       this.ctx.shadowColor = 'rgba(118, 75, 162, 0.8)';
       this.ctx.shadowBlur = 10;
@@ -608,7 +468,6 @@
 
       this.ctx.shadowColor = 'transparent';
 
-      // Eyes
       this.ctx.fillStyle = '#fff';
       this.ctx.beginPath();
       this.ctx.arc(this.player.x + 8, this.player.y + 8, 3, 0, Math.PI * 2);
@@ -618,13 +477,9 @@
       this.ctx.fill();
     }
 
-    /**
-     * Draws obstacles
-     */
     _drawObstacles() {
       this.obstacles.forEach(obstacle => {
         if (obstacle.type === 'spike') {
-          // Spike
           this.ctx.fillStyle = '#FF6B6B';
           this.ctx.shadowColor = 'rgba(255, 107, 107, 0.8)';
           this.ctx.shadowBlur = 8;
@@ -636,7 +491,6 @@
           this.ctx.closePath();
           this.ctx.fill();
         } else if (obstacle.type === 'coin') {
-          // Coin
           this.ctx.fillStyle = '#FFD700';
           this.ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
           this.ctx.shadowBlur = 10;
@@ -651,7 +505,6 @@
           );
           this.ctx.fill();
 
-          // Coin detail
           this.ctx.strokeStyle = '#FFA500';
           this.ctx.lineWidth = 2;
           this.ctx.stroke();
@@ -661,9 +514,6 @@
       });
     }
 
-    /**
-     * Draws particles
-     */
     _drawParticles() {
       this.particles.forEach(particle => {
         this.ctx.fillStyle = particle.color || '#667eea';
@@ -677,41 +527,31 @@
       this.ctx.globalAlpha = 1;
     }
 
-    /**
-     * Draws UI
-     */
     _drawUI() {
-      // Score
       this.ctx.fillStyle = '#fff';
-      this.ctx.font = 'bold 20px Arial';
+      this.ctx.font = 'bold 24px "Arial", sans-serif';
       this.ctx.textAlign = 'left';
       this.ctx.fillText(`Score: ${this.score}`, 20, 40);
 
-      // High Score
-      this.ctx.font = '14px Arial';
+      this.ctx.font = '16px "Arial", sans-serif';
       this.ctx.fillStyle = '#FFD700';
-      this.ctx.fillText(`High: ${this.highScore}`, 20, 65);
+      this.ctx.fillText(`High: ${this.highScore}`, 20, 70);
 
-      // Difficulty
       this.ctx.fillStyle = '#667eea';
-      this.ctx.font = '12px Arial';
-      this.ctx.fillText(`Difficulty: ${this.difficulty.toFixed(1)}x`, 20, 85);
+      this.ctx.font = '12px "Arial", sans-serif';
+      this.ctx.fillText(`Difficulty: ${this.difficulty.toFixed(1)}x`, 20, 90);
 
-      // Pause indicator
       if (this.gamePaused) {
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         this.ctx.fillRect(0, 0, CONFIG.GAME_WIDTH, CONFIG.GAME_HEIGHT);
 
         this.ctx.fillStyle = '#fff';
-        this.ctx.font = 'bold 32px Arial';
+        this.ctx.font = 'bold 48px "Arial", sans-serif';
         this.ctx.textAlign = 'center';
         this.ctx.fillText('PAUSED', CONFIG.GAME_WIDTH / 2, CONFIG.GAME_HEIGHT / 2);
       }
     }
 
-    /**
-     * Attaches input handlers
-     */
     _attachInputHandlers() {
       this.keyDownHandler = (e) => {
         this.keys[e.key] = true;
@@ -752,9 +592,6 @@
       this.canvas.addEventListener('touchend', this.touchEndHandler);
     }
 
-    /**
-     * Detaches input handlers
-     */
     _detachInputHandlers() {
       window.removeEventListener('keydown', this.keyDownHandler);
       window.removeEventListener('keyup', this.keyUpHandler);
@@ -764,7 +601,7 @@
   }
 
   // ============================================================================
-  // 5. OFFLINE RUNTIME UI INJECTOR
+  // 5. OFFLINE RUNTIME UI INJECTOR (IMPROVED)
   // ============================================================================
 
   class OfflineRuntimeUiInjector {
@@ -774,48 +611,90 @@
       this.isInjected = false;
     }
 
-    /**
-     * Creates and injects offline game UI
-     */
     injectOfflineRuntime() {
       if (this.isInjected) return;
 
       try {
-        // Create container
         this.containerElement = document.createElement('div');
         this.containerElement.id = 'anh-offline-runtime';
         this.containerElement.className = 'anh-offline-runtime';
 
-        // Create content
         this.containerElement.innerHTML = `
-          <div class="anh-offline-card">
-            <div class="anh-offline-header">
-              <div class="anh-offline-logo">🛰️</div>
-              <div>
-                <h1 class="anh-offline-title">Offline Mode Active</h1>
-                <p class="anh-offline-subtitle">Stay Connected With Learning</p>
+          <div class="anh-offline-wrapper">
+            <div class="anh-offline-card">
+              <!-- Header -->
+              <div class="anh-offline-header">
+                <div class="anh-offline-header-content">
+                  <div class="anh-offline-logo">📡</div>
+                  <div class="anh-offline-title-section">
+                    <h1 class="anh-offline-title">Offline Mode</h1>
+                    <p class="anh-offline-subtitle">Stay Connected With Learning</p>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div class="anh-offline-game-container">
-              <canvas id="anh-game-canvas"></canvas>
-            </div>
+              <!-- Game Canvas -->
+              <div class="anh-offline-game-container">
+                <canvas id="anh-game-canvas"></canvas>
+              </div>
 
-            <div class="anh-offline-controls">
-              <button id="anh-game-start" class="anh-game-button">▶ Start Game</button>
-              <button id="anh-game-pause" class="anh-game-button" disabled>⏸ Pause</button>
-              <button id="anh-game-restart" class="anh-game-button">↻ Restart</button>
-            </div>
+              <!-- Stats Row -->
+              <div class="anh-offline-stats">
+                <div class="anh-stat-box">
+                  <span class="anh-stat-label">SCORE</span>
+                  <span class="anh-stat-value" id="anh-display-score">0</span>
+                </div>
+                <div class="anh-stat-divider"></div>
+                <div class="anh-stat-box">
+                  <span class="anh-stat-label">HIGH SCORE</span>
+                  <span class="anh-stat-value" id="anh-display-high">0</span>
+                </div>
+              </div>
 
-            <div class="anh-offline-info">
-              <p>↔️ Arrow Keys or A/D to Move</p>
-              <p>🎮 Touch left/right to control on mobile</p>
-              <p>SPACE to pause</p>
-            </div>
+              <!-- Control Buttons -->
+              <div class="anh-offline-controls">
+                <button id="anh-game-start" class="anh-game-button anh-button-primary">
+                  <span class="anh-button-icon">▶</span> Start Game
+                </button>
+                <button id="anh-game-pause" class="anh-game-button anh-button-secondary" disabled>
+                  <span class="anh-button-icon">⏸</span> Pause
+                </button>
+                <button id="anh-game-restart" class="anh-game-button anh-button-secondary">
+                  <span class="anh-button-icon">↻</span> Restart
+                </button>
+              </div>
 
-            <div class="anh-offline-footer">
-              <p>Akshat Network Hub • Offline Runtime Engine</p>
-              <p id="anh-connection-status" class="anh-connection-status">🔴 Offline</p>
+              <!-- Instructions -->
+              <div class="anh-offline-instructions">
+                <h3 class="anh-instructions-title">How to Play</h3>
+                <div class="anh-instructions-grid">
+                  <div class="anh-instruction-item">
+                    <div class="anh-instruction-icon">⌨️</div>
+                    <p>Arrow Keys or A/D to Move</p>
+                  </div>
+                  <div class="anh-instruction-item">
+                    <div class="anh-instruction-icon">📱</div>
+                    <p>Touch left/right to control</p>
+                  </div>
+                  <div class="anh-instruction-item">
+                    <div class="anh-instruction-icon">⏸️</div>
+                    <p>SPACE to Pause</p>
+                  </div>
+                  <div class="anh-instruction-item">
+                    <div class="anh-instruction-icon">🎯</div>
+                    <p>Collect coins, avoid spikes</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Connection Status -->
+              <div class="anh-offline-footer">
+                <div class="anh-connection-monitor">
+                  <span class="anh-connection-indicator" id="anh-connection-status">🔴</span>
+                  <span class="anh-connection-text" id="anh-connection-text">Offline</span>
+                </div>
+                <p class="anh-offline-branding">Akshat Network Hub • Offline Runtime</p>
+              </div>
             </div>
           </div>
         `;
@@ -823,13 +702,12 @@
         this._attachStyles();
         document.body.appendChild(this.containerElement);
 
-        // Initialize game
         this.gameEngine = new OfflineGameEngine();
         const canvas = document.getElementById('anh-game-canvas');
         this.gameEngine.initializeCanvas(canvas);
 
-        // Attach button handlers
         this._attachControlHandlers();
+        this._startScoreUpdater();
 
         this.isInjected = true;
         log('Offline runtime UI injected');
@@ -839,9 +717,6 @@
       }
     }
 
-    /**
-     * Removes offline game UI
-     */
     removeOfflineRuntime() {
       try {
         if (this.gameEngine) {
@@ -859,19 +734,20 @@
       }
     }
 
-    /**
-     * Updates connection status
-     */
     updateConnectionStatus() {
       try {
-        const statusEl = document.getElementById('anh-connection-status');
-        if (statusEl) {
+        const indicator = document.getElementById('anh-connection-status');
+        const text = document.getElementById('anh-connection-text');
+
+        if (indicator && text) {
           if (isOnline()) {
-            statusEl.textContent = '🟢 Online';
-            statusEl.style.color = '#4ade80';
+            indicator.textContent = '🟢';
+            text.textContent = 'Online';
+            text.style.color = '#4ade80';
           } else {
-            statusEl.textContent = '🔴 Offline';
-            statusEl.style.color = '#FF6B6B';
+            indicator.textContent = '🔴';
+            text.textContent = 'Offline';
+            text.style.color = '#FF6B6B';
           }
         }
       } catch (e) {
@@ -879,9 +755,25 @@
       }
     }
 
-    /**
-     * Attaches control handlers
-     */
+    _startScoreUpdater() {
+      this.scoreUpdateInterval = setInterval(() => {
+        try {
+          const scoreEl = document.getElementById('anh-display-score');
+          const highEl = document.getElementById('anh-display-high');
+
+          if (scoreEl && this.gameEngine) {
+            scoreEl.textContent = this.gameEngine.score;
+          }
+
+          if (highEl && this.gameEngine) {
+            highEl.textContent = this.gameEngine.highScore;
+          }
+        } catch (e) {
+          // Silent fail
+        }
+      }, 100);
+    }
+
     _attachControlHandlers() {
       try {
         const startBtn = document.getElementById('anh-game-start');
@@ -919,15 +811,16 @@
       }
     }
 
-    /**
-     * Attaches styles
-     */
     _attachStyles() {
       if (document.getElementById('anh-offline-styles')) return;
 
       const style = document.createElement('style');
       style.id = 'anh-offline-styles';
       style.textContent = `
+        * {
+          -webkit-tap-highlight-color: transparent;
+        }
+
         .anh-offline-runtime {
           position: fixed;
           top: 0;
@@ -939,7 +832,10 @@
           display: flex;
           align-items: center;
           justify-content: center;
+          overflow-y: auto;
+          padding: 20px;
           animation: fadeIn 0.3s ease-out;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         @keyframes fadeIn {
@@ -947,91 +843,180 @@
           to { opacity: 1; }
         }
 
-        .anh-offline-card {
-          background: rgba(20, 20, 40, 0.95);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(102, 126, 234, 0.3);
-          border-radius: 16px;
-          padding: 30px;
-          max-width: 600px;
-          width: 90%;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-          color: #e0e0e0;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        .anh-offline-wrapper {
+          width: 100%;
+          display: flex;
+          justify-content: center;
         }
 
+        .anh-offline-card {
+          background: rgba(20, 20, 40, 0.98);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(102, 126, 234, 0.4);
+          border-radius: 20px;
+          padding: 32px;
+          max-width: 700px;
+          width: 100%;
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+          color: #e0e0e0;
+        }
+
+        /* Header */
         .anh-offline-header {
+          margin-bottom: 28px;
+        }
+
+        .anh-offline-header-content {
           display: flex;
           align-items: center;
           gap: 16px;
-          margin-bottom: 20px;
         }
 
         .anh-offline-logo {
-          font-size: 40px;
-          animation: pulse 2s ease-in-out infinite;
+          font-size: 48px;
+          animation: float 3s ease-in-out infinite;
+          flex-shrink: 0;
         }
 
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.1); }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+
+        .anh-offline-title-section {
+          flex: 1;
         }
 
         .anh-offline-title {
           margin: 0;
-          font-size: 24px;
-          font-weight: 600;
+          font-size: 28px;
+          font-weight: 700;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
+          line-height: 1.2;
         }
 
         .anh-offline-subtitle {
-          margin: 4px 0 0 0;
+          margin: 6px 0 0 0;
           font-size: 14px;
-          color: #999;
+          color: #888;
+          font-weight: 500;
         }
 
+        /* Game Container */
         .anh-offline-game-container {
-          margin: 20px 0;
-          text-align: center;
-          background: #0a0e27;
-          border-radius: 8px;
-          padding: 10px;
-          border: 1px solid rgba(102, 126, 234, 0.2);
+          margin: 24px 0;
+          background: linear-gradient(135deg, rgba(10, 14, 39, 0.8) 0%, rgba(26, 14, 53, 0.8) 100%);
+          border: 2px solid rgba(102, 126, 234, 0.3);
+          border-radius: 12px;
+          padding: 16px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          overflow: hidden;
         }
 
         #anh-game-canvas {
           display: block;
           max-width: 100%;
           height: auto;
-          border-radius: 4px;
+          border-radius: 8px;
+          background: #0a0e27;
         }
 
+        /* Stats */
+        .anh-offline-stats {
+          display: flex;
+          gap: 0;
+          margin-bottom: 24px;
+          background: rgba(102, 126, 234, 0.08);
+          border-radius: 12px;
+          overflow: hidden;
+          border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .anh-stat-box {
+          flex: 1;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .anh-stat-label {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 1.5px;
+          color: #888;
+          text-transform: uppercase;
+        }
+
+        .anh-stat-value {
+          font-size: 24px;
+          font-weight: 700;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+
+        .anh-stat-divider {
+          width: 1px;
+          background: rgba(102, 126, 234, 0.2);
+        }
+
+        /* Controls */
         .anh-offline-controls {
           display: flex;
-          gap: 10px;
-          margin: 20px 0;
+          gap: 12px;
+          margin-bottom: 24px;
           flex-wrap: wrap;
           justify-content: center;
         }
 
         .anh-game-button {
-          padding: 10px 16px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
+          padding: 12px 20px;
           border: none;
-          border-radius: 6px;
+          border-radius: 8px;
           cursor: pointer;
           font-weight: 600;
           font-size: 14px;
-          transition: all 0.2s;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+          min-width: 140px;
+          justify-content: center;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
 
-        .anh-game-button:hover:not(:disabled) {
+        .anh-button-primary {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .anh-button-primary:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+          box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+        }
+
+        .anh-button-secondary {
+          background: rgba(102, 126, 234, 0.15);
+          color: #667eea;
+          border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .anh-button-secondary:hover:not(:disabled) {
+          background: rgba(102, 126, 234, 0.25);
+          border-color: rgba(102, 126, 234, 0.5);
+          transform: translateY(-2px);
         }
 
         .anh-game-button:disabled {
@@ -1039,49 +1024,114 @@
           cursor: not-allowed;
         }
 
-        .anh-offline-info {
-          background: rgba(102, 126, 234, 0.1);
-          border-left: 4px solid #667eea;
+        .anh-button-icon {
+          font-size: 16px;
+        }
+
+        /* Instructions */
+        .anh-offline-instructions {
+          background: rgba(102, 126, 234, 0.08);
+          border: 1px solid rgba(102, 126, 234, 0.2);
+          border-radius: 12px;
+          padding: 20px;
+          margin-bottom: 24px;
+        }
+
+        .anh-instructions-title {
+          margin: 0 0 16px 0;
+          font-size: 14px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #667eea;
+        }
+
+        .anh-instructions-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 12px;
+        }
+
+        .anh-instruction-item {
+          text-align: center;
           padding: 12px;
-          border-radius: 4px;
+          border-radius: 8px;
+          background: rgba(10, 14, 39, 0.5);
+          border: 1px solid rgba(102, 126, 234, 0.15);
+        }
+
+        .anh-instruction-icon {
+          font-size: 24px;
+          margin-bottom: 8px;
+          display: block;
+        }
+
+        .anh-instruction-item p {
+          margin: 0;
           font-size: 12px;
-          margin: 16px 0;
+          color: #888;
+          line-height: 1.4;
         }
 
-        .anh-offline-info p {
-          margin: 4px 0;
-        }
-
+        /* Footer */
         .anh-offline-footer {
           text-align: center;
           border-top: 1px solid rgba(102, 126, 234, 0.2);
-          padding-top: 12px;
+          padding-top: 20px;
+        }
+
+        .anh-connection-monitor {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+
+        .anh-connection-indicator {
           font-size: 12px;
-          color: #888;
+          animation: blink 1.5s ease-in-out infinite;
         }
 
-        .anh-offline-footer p {
-          margin: 4px 0;
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
 
-        .anh-connection-status {
+        .anh-connection-text {
+          font-size: 13px;
           font-weight: 600;
-          margin-top: 8px;
           color: #FF6B6B;
         }
 
+        .anh-offline-branding {
+          margin: 0;
+          font-size: 11px;
+          color: #666;
+          letter-spacing: 0.5px;
+        }
+
+        /* Mobile Responsive */
         @media (max-width: 640px) {
           .anh-offline-card {
             padding: 20px;
+            border-radius: 16px;
           }
 
-          .anh-offline-header {
-            flex-direction: column;
-            text-align: center;
+          .anh-offline-header-content {
+            gap: 12px;
+          }
+
+          .anh-offline-logo {
+            font-size: 36px;
           }
 
           .anh-offline-title {
-            font-size: 20px;
+            font-size: 22px;
+          }
+
+          .anh-offline-subtitle {
+            font-size: 12px;
           }
 
           .anh-offline-controls {
@@ -1089,25 +1139,57 @@
           }
 
           .anh-game-button {
+            min-width: unset;
             width: 100%;
           }
 
-          .anh-offline-info {
+          .anh-instructions-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+          }
+
+          .anh-instruction-item {
+            padding: 8px;
+          }
+
+          .anh-instruction-icon {
+            font-size: 20px;
+          }
+
+          .anh-instruction-item p {
             font-size: 11px;
+          }
+
+          .anh-offline-game-container {
+            padding: 12px;
+          }
+
+          .anh-stat-box {
+            padding: 12px;
+          }
+
+          .anh-stat-value {
+            font-size: 18px;
           }
         }
 
+        /* Reduced Motion */
         @media (prefers-reduced-motion: reduce) {
-          .anh-offline-runtime {
-            animation: none;
-          }
-
           .anh-offline-logo {
             animation: none;
           }
 
+          .anh-connection-indicator {
+            animation: none;
+            opacity: 1;
+          }
+
           .anh-game-button:hover:not(:disabled) {
             transform: none;
+          }
+
+          .anh-offline-runtime {
+            animation: none;
           }
         }
       `;
@@ -1128,17 +1210,11 @@
       this.gameShowTimer = null;
     }
 
-    /**
-     * Main initialization
-     */
     initialize() {
       try {
-        log('=== ANH Offline Engine v1.0.0 Initializing ===');
+        log('=== ANH Offline Engine v2.0.0 Initializing ===');
 
-        // Initialize offline detection
         this.offlineDetection.initialize();
-
-        // Monitor offline state
         this._monitorOfflineState();
 
         log('=== ANH Offline Engine Ready ===');
@@ -1148,9 +1224,6 @@
       }
     }
 
-    /**
-     * Monitors offline state and shows/hides game
-     */
     _monitorOfflineState() {
       const checkInterval = setInterval(() => {
         try {
@@ -1162,7 +1235,6 @@
             this._hideOfflineGame();
           }
 
-          // Update connection status in UI
           if (this.isGameActive) {
             this.uiInjector.updateConnectionStatus();
           }
@@ -1171,16 +1243,12 @@
         }
       }, 500);
 
-      // Cleanup on page unload
       window.addEventListener('beforeunload', () => {
         clearInterval(checkInterval);
         this.offlineDetection.destroy();
       });
     }
 
-    /**
-     * Shows offline game
-     */
     _showOfflineGame() {
       try {
         this.uiInjector.injectOfflineRuntime();
@@ -1191,9 +1259,6 @@
       }
     }
 
-    /**
-     * Hides offline game
-     */
     _hideOfflineGame() {
       try {
         this.uiInjector.removeOfflineRuntime();
@@ -1221,55 +1286,6 @@
     }
   }
 
-  // Start bootstrap
   bootstrap();
 
 })(window);
-
-/**
- * ANH OFFLINE ENGINE — FEATURES
- * 
- * IMPLEMENTED:
- * ✓ Offline Detection (navigator.onLine + connectivity checks)
- * ✓ Dynamic Runtime Injection (No external assets)
- * ✓ Canvas-based Mini-Game (Avoid obstacles game)
- * ✓ Touch & Keyboard Controls
- * ✓ Scoring System with Persistence
- * ✓ High Score Tracking
- * ✓ Game Physics Engine
- * ✓ Collision Detection
- * ✓ Difficulty Scaling
- * ✓ Particle Effects
- * ✓ Responsive Design
- * ✓ Graceful Reconnection Handling
- * ✓ Memory Optimization
- * ✓ Security (No eval, safe injection)
- * 
- * GAMEPLAY:
- * • Avoid red spike obstacles
- * • Collect yellow coins for points
- * • Dodge spikes for bonus points
- * • Difficulty increases over time
- * • Local high score persistence
- * • Touch and keyboard controls
- * 
- * OFFLINE ACTIVATION:
- * • Triggers after 3 seconds offline
- * • Fullscreen overlay experience
- * • Auto-hides when connection restored
- * • Preserves game data locally
- * 
- * PERFORMANCE:
- * • 60 FPS canvas rendering
- * • requestAnimationFrame optimization
- * • Low memory footprint
- * • Efficient particle system
- * • Responsive to device resize
- * 
- * ACCESSIBILITY:
- * • Keyboard controls (Arrow keys / A-D)
- * • Touch controls (Left/right half)
- * • Clear visual feedback
- * • Pause functionality
- * • Readable contrast ratios
- */
