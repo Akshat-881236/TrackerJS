@@ -1062,30 +1062,6 @@
     }
   }
 
-  /* redirect_handler.js */
-
-(function () {
-    "use strict";
-
-    const TARGET =
-        "https://akshat-881236.github.io/AkshatNetworkHub/";
-
-    const SOURCES = [
-        "https://akshat-881236.github.io/",
-        "https://akshat-145609.github.io/",
-        "https://akshat-881236.github.io",
-        "https://akshat-145609.github.io"
-    ];
-
-    document.querySelectorAll("a[href]").forEach(anchor => {
-        const href = anchor.href.trim();
-
-        if (SOURCES.includes(href)) {
-            anchor.href = TARGET;
-        }
-    });
-})();
-
   // Start bootstrap immediately
   bootstrap();
 
