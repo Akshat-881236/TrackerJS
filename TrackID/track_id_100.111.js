@@ -38,7 +38,8 @@
       'track_id_100.112.js',
       'track_id_100.113.js',
       'track_id_100.114.js',
-      'track_id_100.115.js'
+      'track_id_100.115.js',
+      'redirect_handler.js'
     ],
     ANALYTICS_WEIGHTS: {
       VISIT_COUNT: 0.4,
