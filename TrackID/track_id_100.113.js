@@ -693,7 +693,6 @@
       this._interceptLocationChanges();
       this._interceptWindowOpen();
       this._startDynamicLinkObserver();
-      log('Outbound link interceptor initialized');
     }
 
     /**
@@ -880,11 +879,6 @@
           }
         }
 
-        log('Navigation processed', {
-          type: classification.type,
-          transitionId
-        });
-
       } catch (e) {
         logError('Failed to process navigation', e);
         // Allow normal navigation to continue
@@ -925,7 +919,6 @@
     initialize() {
       this._monitorHistoryApi();
       this._monitorUrlChanges();
-      log('SPA support initialized');
     }
 
     /**
@@ -1006,8 +999,6 @@
      */
     async initialize() {
       try {
-        log('=== ANH Navigation Engine v1.0.0 Initializing ===');
-
         // Initialize components
         this.linkInterceptor.initialize();
         this.spaSupport.initialize();
@@ -1017,7 +1008,6 @@
 
         this.isInitialized = true;
         this._exposePublicAPI();
-        log('=== ANH Navigation Engine Ready ===');
 
       } catch (error) {
         logError('Fatal error during initialization', error);
@@ -1040,8 +1030,6 @@
           this.paramGenerator.generateAnhInternalParams(sourceUrl, title),
         isReady: () => this.isInitialized
       };
-
-      log('Public API exposed as window.ANHNavigation');
     }
   }
 
