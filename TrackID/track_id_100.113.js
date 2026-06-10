@@ -84,7 +84,6 @@
    */
   function log(message, data = null) {
     const timestamp = new Date().toLocaleTimeString();
-    console.log(`[ANH Navigation ${timestamp}] ${message}`, data || '');
   }
 
   /**
