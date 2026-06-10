@@ -143,7 +143,6 @@
 
   function log(message, data = null) {
     const timestamp = new Date().toLocaleTimeString();
-    console.log(`[ANH Security v2 ${timestamp}] ${message}`, data || '');
   }
 
   function logError(message, error = null) {
@@ -1296,7 +1295,6 @@
         request.onsuccess = (e) => {
           this.db = e.target.result;
           this.dbReady = true;
-          log('IndexedDB initialized');
         };
 
         request.onupgradeneeded = (e) => {
@@ -1847,7 +1845,6 @@
      */
     async initialize() {
       try {
-        log('=== ANH Security Governance v2.0 Initializing ===');
 
         // Perform security analysis
         const actionResult = await this.redirectManager.determineRedirectAction();
@@ -1868,12 +1865,10 @@
         // Execute action
         switch (actionResult.action) {
           case 'SILENT_CONTINUE':
-            log('Silently continuing from trusted source');
             this._sanitizeAndContinue();
             break;
 
           case 'SHOW_DIAGNOSIS':
-            log('Showing security diagnosis');
             await this.uiEngine.showDiagnosisCard();
             await delay(CONFIG.DIAGNOSIS_CARD_DISPLAY_TIME);
             this.uiEngine.hideCard();
@@ -1881,7 +1876,6 @@
             break;
 
           case 'QUARANTINE_REDIRECT':
-            log('Initiating quarantine redirect');
             await this.uiEngine.showDiagnosisCard();
             await delay(2000);
             this.uiEngine.hideCard();
@@ -1894,7 +1888,6 @@
 
         this.isInitialized = true;
         this._exposePublicAPI();
-        log('=== ANH Security Governance v2 Ready ===');
 
       } catch (error) {
         logError('Fatal initialization error', error);
@@ -1938,8 +1931,6 @@
         isReady: () => this.isInitialized,
         version: '2.0.0'
       };
-
-      log('Public API exposed as window.ANHSecurityV2');
     }
   }
 
