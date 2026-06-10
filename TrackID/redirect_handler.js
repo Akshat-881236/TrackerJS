@@ -76,8 +76,4 @@
         subtree: true
     });
 
-    console.log(
-        "[ANH Redirect Handler] Active"
-    );
-
 })();
