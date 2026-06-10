@@ -48,7 +48,6 @@
 
   function log(message, data = null) {
     const timestamp = new Date().toLocaleTimeString();
-    console.log(`[ANH Offline ${timestamp}] ${message}`, data || '');
   }
 
   function logError(message, error = null) {
@@ -118,15 +117,12 @@
       if (!isOnline()) {
         this._handleOffline();
       }
-
-      log('Offline detection engine initialized');
     }
 
     _handleOffline() {
       if (!this.isOffline) {
         this.isOffline = true;
         this.offlineStartTime = Date.now();
-        log('Offline state detected');
       }
     }
 
@@ -134,7 +130,6 @@
       if (this.isOffline) {
         this.isOffline = false;
         this.offlineStartTime = null;
-        log('Online state restored');
       }
     }
 
@@ -234,8 +229,6 @@
 
       this._attachInputHandlers();
       this._gameLoop();
-
-      log('Game started');
     }
 
     stop() {
@@ -409,8 +402,6 @@
       stats.totalPlayTime += (Date.now() - (this.gameStartTime || Date.now())) / 1000;
       setStorage(CONFIG.STORAGE_KEY_STATS, stats);
       setStorage(CONFIG.STORAGE_KEY_LAST_SCORE, this.score);
-
-      log('Game over', { score: this.score, highScore: this.highScore });
     }
 
     render() {
@@ -710,7 +701,6 @@
         this._startScoreUpdater();
 
         this.isInjected = true;
-        log('Offline runtime UI injected');
 
       } catch (e) {
         logError('Failed to inject offline runtime UI', e);
@@ -727,8 +717,6 @@
         this.containerElement = null;
         this.gameEngine = null;
         this.isInjected = false;
-
-        log('Offline runtime UI removed');
       } catch (e) {
         logError('Failed to remove offline runtime UI', e);
       }
@@ -1267,12 +1255,9 @@
 
     initialize() {
       try {
-        log('=== ANH Offline Engine v2.0.0 Initializing ===');
 
         this.offlineDetection.initialize();
         this._monitorOfflineState();
-
-        log('=== ANH Offline Engine Ready ===');
 
       } catch (error) {
         logError('Fatal error during initialization', error);
@@ -1308,7 +1293,6 @@
       try {
         this.uiInjector.injectOfflineRuntime();
         this.isGameActive = true;
-        log('Offline game activated');
       } catch (e) {
         logError('Failed to show offline game', e);
       }
@@ -1318,7 +1302,6 @@
       try {
         this.uiInjector.removeOfflineRuntime();
         this.isGameActive = false;
-        log('Offline game deactivated, connection restored');
       } catch (e) {
         logError('Failed to hide offline game', e);
       }
