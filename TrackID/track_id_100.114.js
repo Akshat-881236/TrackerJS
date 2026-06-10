@@ -76,7 +76,6 @@
    */
   function log(message, data = null) {
     const timestamp = new Date().toLocaleTimeString();
-    console.log(`[ANH Analytics ${timestamp}] ${message}`, data || '');
   }
 
   /**
@@ -262,7 +261,6 @@
         request.onsuccess = () => {
           this.db = request.result;
           this.isInitialized = true;
-          log('Analytics IndexedDB initialized');
           resolve(this.db);
         };
 
@@ -311,8 +309,6 @@
         db.createObjectStore(CONFIG.OBJECT_STORES.SEO_RUNTIME, 
                            { keyPath: 'id', autoIncrement: true });
       }
-
-      log('Analytics object stores created');
     }
 
     /**
@@ -323,7 +319,6 @@
         const transaction = this.db.transaction([storeName], 'readwrite');
         const store = transaction.objectStore(storeName);
         const request = store.put(data);
-
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
@@ -337,7 +332,6 @@
         const transaction = this.db.transaction([storeName], 'readonly');
         const store = transaction.objectStore(storeName);
         const request = store.get(key);
-
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
@@ -351,7 +345,6 @@
         const transaction = this.db.transaction([storeName], 'readonly');
         const store = transaction.objectStore(storeName);
         const request = store.getAll();
-
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
@@ -366,7 +359,6 @@
         const store = transaction.objectStore(storeName);
         const index = store.index(indexName);
         const request = index.getAll(value);
-
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
@@ -380,7 +372,6 @@
         const transaction = this.db.transaction([storeName], 'readwrite');
         const store = transaction.objectStore(storeName);
         const request = store.delete(key);
-
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
       });
@@ -394,7 +385,6 @@
         const transaction = this.db.transaction([storeName], 'readwrite');
         const store = transaction.objectStore(storeName);
         const request = store.clear();
-
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
       });
@@ -414,7 +404,6 @@
       this.isVisible = true;
       this.idleTimer = null;
     }
-
     /**
      * Initializes screen time tracking
      */
@@ -422,7 +411,6 @@
       this._attachVisibilityListener();
       this._attachFocusListener();
       this._startHeartbeat();
-      log('Screen time engine initialized');
     }
 
     /**
@@ -446,7 +434,6 @@
         this.isActive = true;
         this._resetIdleTimer();
       });
-
       window.addEventListener('blur', () => {
         this.isActive = false;
       });
@@ -599,8 +586,6 @@
       setInterval(() => {
         this.checkAndGenerateReport();
       }, CONFIG.REPORT_GENERATION_INTERVAL);
-
-      log('Daily analytics generator initialized');
     }
 
     /**
@@ -628,11 +613,6 @@
           'date',
           yesterday
         );
-
-        if (records.length === 0) {
-          log(`No data to archive for ${yesterday}`);
-          return;
-        }
 
         // Aggregate data
         const aggregated = this._aggregateScreenTime(records, yesterday);
@@ -667,11 +647,6 @@
         for (const record of toDelete) {
           await this.dbManager.delete(CONFIG.OBJECT_STORES.DAILY_SCREEN_LOGS, record.id);
         }
-
-        log(`Daily report archived for ${yesterday}`, {
-          compressed: compressed.length,
-          ratio: archiveEntry.compressionRatio + '%'
-        });
 
         // Merge historical data
         await this.mergeHistoricalReports();
@@ -780,11 +755,6 @@
         merged.totalScreenTime = totalScreenTime;
         merged.totalVisits = totalVisits;
 
-        log('Historical reports merged', {
-          reports: merged.reports,
-          screenTime: merged.totalScreenTime
-        });
-
         return merged;
       } catch (e) {
         logError('Failed to merge historical reports', e);
@@ -810,7 +780,6 @@
       this.detectedSource = await this.detectAiSource();
       if (this.detectedSource) {
         await this.recordAiVisit();
-        log(`AI traffic detected: ${this.detectedSource}`);
       }
     }
 
@@ -822,21 +791,18 @@
       const url = getCurrentPageUrl();
       const utmSource = getUrlParam('utm_source');
       const utmReferrer = getUrlParam('utm_referrer');
-
       // Check referrer patterns
       for (const [source, pattern] of Object.entries(CONFIG.AI_DETECTION_PATTERNS)) {
         if (pattern.test(referrer)) {
           return source;
         }
       }
-
       // Check URL patterns
       for (const [source, pattern] of Object.entries(CONFIG.AI_DETECTION_PATTERNS)) {
         if (pattern.test(url)) {
           return source;
         }
       }
-
       // Check UTM params
       if (utmSource) {
         for (const [source, pattern] of Object.entries(CONFIG.AI_DETECTION_PATTERNS)) {
@@ -845,7 +811,6 @@
           }
         }
       }
-
       // Check UTM referrer
       if (utmReferrer) {
         for (const [source, pattern] of Object.entries(CONFIG.AI_DETECTION_PATTERNS)) {
@@ -854,7 +819,6 @@
           }
         }
       }
-
       return null;
     }
 
@@ -872,7 +836,6 @@
           date: getDateString(),
           userAgent: navigator.userAgent.substring(0, 100)
         };
-
         await this.dbManager.addOrUpdate(CONFIG.OBJECT_STORES.AI_TRAFFIC, record);
       } catch (e) {
         logError('Failed to record AI visit', e);
@@ -885,10 +848,8 @@
     async getAiAnalytics(days = 30) {
       try {
         const allRecords = await this.dbManager.getAll(CONFIG.OBJECT_STORES.AI_TRAFFIC);
-
         const startDate = getDateString(new Date(Date.now() - days * 86400000));
         const filtered = allRecords.filter(r => r.date >= startDate);
-
         const analytics = {
           totalAiVisits: filtered.length,
           bySource: {},
@@ -1121,7 +1082,6 @@
       await this.injectBreadcrumbSchema();
       await this.injectWebPageSchema();
       await this.injectOrganizationSchema();
-      log('JSON-LD schemas injected');
     }
 
     /**
@@ -1202,7 +1162,14 @@
           sameAs: [
             'https://github.com/Akshat-881236',
             'https://linkedin.com/in/akshat-network-hub',
-            'https://www.linkedin.com/in/akshat-prasad-anh/'
+            'https://www.linkedin.com/in/akshat-prasad-anh/',
+            'https://medium.com/@its.akshatnetworkhub23',
+            'https://akshat-881236.github.io/AkshatNetworkHub/',
+            'https://github.com/itsakshatnetworkhub-881238',
+            'https://leetcode.com/u/Akshat-881236/',
+            'https://www.hackerrank.com/profile/akshatpsd2005',
+            'https://www.hackerrank.com/certificates/5f37916110e9',
+            'https://hackerrank-resume.s3.us-east-1.amazonaws.com/uploads/30320895/MzAzMjA4OTU=.pdf'
           ]
         };
 
@@ -1508,7 +1475,6 @@
      */
     async initialize() {
       try {
-        log('=== ANH Analytics & SEO Engine v1.0.0 Initializing ===');
 
         // Initialize database
         this.dbManager = new AnalyticsDbManager();
@@ -1557,7 +1523,6 @@
 
         this.isInitialized = true;
         this._exposePublicAPI();
-        log('=== ANH Analytics & SEO Engine Ready ===');
 
       } catch (error) {
         logError('Fatal error during initialization', error);
@@ -1580,8 +1545,6 @@
         }),
         isReady: () => this.isInitialized
       };
-
-      log('Public API exposed as window.ANHAnalytics');
     }
   }
 
