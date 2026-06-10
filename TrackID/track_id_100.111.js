@@ -118,7 +118,6 @@
    */
   function log(message, data = null) {
     const timestamp = new Date().toLocaleTimeString();
-    console.log(`[ANH Tracking ${timestamp}] ${message}`, data || '');
   }
 
   /**
@@ -153,7 +152,6 @@
         request.onsuccess = () => {
           this.db = request.result;
           this.isInitialized = true;
-          log('IndexedDB initialized successfully');
           resolve(this.db);
         };
 
@@ -176,7 +174,6 @@
         visitStore.createIndex('timestamp', 'timestamp', { unique: false });
         visitStore.createIndex('visit_day', 'visit_day', { unique: false });
         visitStore.createIndex('url_day', ['url', 'visit_day'], { unique: false });
-        log('Created visit_logs store with indexes');
       }
 
       // Analytics Cache store
@@ -184,7 +181,6 @@
         const analyticsStore = db.createObjectStore(CONFIG.OBJECT_STORES.ANALYTICS_CACHE, 
                                                     { keyPath: 'id', autoIncrement: true });
         analyticsStore.createIndex('generated_at', 'generated_at', { unique: false });
-        log('Created analytics_cache store');
       }
 
       // High Visit URLs store
@@ -192,7 +188,6 @@
         const highVisitStore = db.createObjectStore(CONFIG.OBJECT_STORES.HIGH_VISIT_URL, 
                                                     { keyPath: 'url', unique: true });
         highVisitStore.createIndex('score', 'score', { unique: false });
-        log('Created high_visit_url store');
       }
     }
 
@@ -315,7 +310,6 @@
     async initialize() {
       this._attachUnloadHandler();
       this._startScreentimeTracking();
-      log('Visit tracker initialized');
     }
 
     /**
@@ -344,7 +338,6 @@
             new Date(prev.timestamp) < new Date(curr.timestamp) ? prev : curr
           );
           await this.dbManager.delete(CONFIG.OBJECT_STORES.VISIT_LOGS, oldest.id);
-          log(`FIFO rotation: Removed oldest entry for ${url}`);
         }
 
         // Store new visit
@@ -358,7 +351,6 @@
         };
 
         await this.dbManager.addOrUpdate(CONFIG.OBJECT_STORES.VISIT_LOGS, visitRecord);
-        log(`Visit recorded: ${title || url}`);
       } catch (error) {
         logError('Failed to record visit', error);
       }
@@ -455,7 +447,6 @@
      * Initializes script loader
      */
     async initialize() {
-      log('Initializing chained script loader');
       await this.loadAllScripts();
     }
 
@@ -468,7 +459,6 @@
       );
       
       await Promise.allSettled(promises);
-      log('Chained script loading completed', this.loadReport);
     }
 
     /**
@@ -478,7 +468,6 @@
       try {
         // Check if already loaded
         if (this._isScriptLoaded(scriptName)) {
-          log(`Script already loaded: ${scriptName}`);
           this.loadReport.scripts.push({
             name: scriptName,
             status: 'already_loaded',
@@ -489,7 +478,6 @@
 
         // Check if currently loading
         if (this.loadingState.has(scriptName)) {
-          log(`Script already loading: ${scriptName}`);
           return this.loadingState.get(scriptName);
         }
 
@@ -511,7 +499,6 @@
           status: 'loaded',
           timestamp: getISOTimestamp()
         });
-        log(`✓ Script loaded: ${scriptName}`);
 
       } catch (error) {
         this.loadReport.failed++;
@@ -615,7 +602,6 @@
       this.refreshInterval = setInterval(() => {
         this.refreshAnalytics();
       }, CONFIG.ANALYTICS_REFRESH_INTERVAL);
-      log('Analytics processor initialized');
     }
 
     /**
@@ -696,7 +682,6 @@
         };
 
         await this.dbManager.addOrUpdate(CONFIG.OBJECT_STORES.ANALYTICS_CACHE, cacheEntry);
-        log(`Analytics refreshed: ${analytics.length} URLs analyzed`);
 
       } catch (error) {
         logError('Failed to refresh analytics', error);
@@ -762,7 +747,6 @@
       this.checkInterval = setInterval(() => {
         this._checkAndShowCard();
       }, CONFIG.ANALYTICS_REFRESH_INTERVAL);
-      log('Resume Journey card generator initialized');
     }
 
     /**
@@ -857,7 +841,6 @@
       document.body.appendChild(card);
       this.cardElement = card;
       this.isVisible = true;
-      log('Resume Journey card rendered');
     }
 
     /**
@@ -1105,7 +1088,6 @@
      */
     async initialize() {
       try {
-        log('=== ANH Tracking Engine v1.0.0 Initializing ===');
 
         // 1. Initialize IndexedDB
         this.dbManager = new IndexedDBManager();
@@ -1129,7 +1111,6 @@
         await this.resumeCard.initialize();
 
         this.isInitialized = true;
-        log('=== ANH Tracking Engine Ready ===');
         this._exposePublicAPI();
 
       } catch (error) {
@@ -1150,8 +1131,6 @@
         clearData: () => this._clearAllData(),
         isReady: () => this.isInitialized
       };
-
-      log('Public API exposed as window.ANHTracking');
     }
 
     /**
@@ -1162,7 +1141,6 @@
         for (const storeName of Object.values(CONFIG.OBJECT_STORES)) {
           await this.dbManager.clearStore(storeName);
         }
-        log('All tracking data cleared');
       } catch (error) {
         logError('Failed to clear data', error);
       }
@@ -1177,7 +1155,6 @@
       if (this.visitTracker.screenTimeInterval) {
         clearInterval(this.visitTracker.screenTimeInterval);
       }
-      log('ANH Tracking Engine shut down');
     }
   }
 
