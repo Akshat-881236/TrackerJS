@@ -39,6 +39,7 @@
       'track_id_100.113.js',
       'track_id_100.114.js',
       'track_id_100.115.js',
+      'tracking-advanced.js',
       'redirect_handler.js'
     ],
     ANALYTICS_WEIGHTS: {
