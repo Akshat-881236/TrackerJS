@@ -40,6 +40,11 @@
       'track_id_100.114.js',
       'track_id_100.115.js',
       'tracking-advanced.js',
+      'session-core-tracker.js',
+      'user-journey-tracker.js',
+      'engagement-ui-tracker.js',
+      'behavioral-analytics-tracker.js',
+      'seo-runtime-auditor.js',
       'redirect_handler.js'
     ],
     ANALYTICS_WEIGHTS: {
