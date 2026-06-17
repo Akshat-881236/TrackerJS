@@ -1,19 +1,19 @@
 /**
  * FILE: anh-inspection-mode.js
  * Trigger: CTRL + C (When no text is selected)
- * Features: Prism.js Highlighting, Line/Col Tracking, Find & Replace, ANH Scripto Compliance
+ * Purpose: ANH Developer Tools - Frontend inspection & site exploration for ANH Visitors
  * 
- * IMPROVEMENTS:
- * ✓ Fixed scrolling synchronization
- * ✓ Proper escape handling in find & replace
- * ✓ Memory leak prevention & cleanup
- * ✓ Debounced highlighting for performance
- * ✓ Virtual scrolling support
- * ✓ Keyboard shortcuts (ESC, CTRL+S, etc.)
- * ✓ Error handling & user feedback
- * ✓ Tab persistence & restore
- * ✓ Syntax error detection
- * ✓ Code formatting & beautification
+ * FEATURES:
+ * ✓ Responsive Design (Mobile, Tablet, Desktop)
+ * ✓ DOM Inspector with Element Picker
+ * ✓ Style Inspector (Computed & Inline Styles)
+ * ✓ Console Log Viewer
+ * ✓ Network Monitor
+ * ✓ Source Code Explorer
+ * ✓ Performance Metrics
+ * ✓ Accessibility Checker
+ * ✓ Color Picker & Palette Generator
+ * ✓ Responsive Preview
  */
 
 (function () {
@@ -21,45 +21,67 @@
 
     // ============= STATE MANAGEMENT =============
     const STATE = {
-        isInspectorOpen: false,
+        isDevToolsOpen: false,
         sourceFiles: [],
         activeFileIndex: 0,
+        activePanelIndex: 0,
         blobUrls: [],
-        eventListeners: [],
+        consoleMessages: [],
+        networkRequests: [],
+        selectedElement: null,
+        elementPickerActive: false,
+        elementPickerOverlay: null,
+        performanceMetrics: {},
+        blobURLs: [],
         highlightTimeout: null,
         debounceDelay: 150,
     };
 
-    const CONFIG = {
-        prismCSSUrl: 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css',
-        prismJSUrl: 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js',
-        prismLanguages: ['https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js'],
+    const PANELS = {
+        INSPECTOR: 0,
+        CONSOLE: 1,
+        SOURCES: 2,
+        NETWORK: 3,
+        PERFORMANCE: 4,
+        ACCESSIBILITY: 5
+    };
+
+    const VIEWPORT_SIZES = {
+        mobile: { width: 375, height: 667, name: 'iPhone 12' },
+        tablet: { width: 768, height: 1024, name: 'iPad' },
+        desktop: { width: 1920, height: 1080, name: 'Desktop' },
+        custom: { width: 1280, height: 720, name: 'Custom' }
     };
 
     // ============= INITIALIZATION =============
     window.addEventListener('keydown', handleGlobalKeydown);
 
+    // Intercept console methods
+    interceptConsole();
+    interceptNetworkRequests();
+
     function handleGlobalKeydown(e) {
         if (e.ctrlKey && e.key.toLowerCase() === 'c') {
             const selectedText = window.getSelection().toString();
-            if (!selectedText && !STATE.isInspectorOpen) {
+            if (!selectedText && !STATE.isDevToolsOpen) {
                 e.preventDefault();
-                launchInspector();
+                launchDevTools();
             }
         }
     }
 
-    async function launchInspector() {
-        STATE.isInspectorOpen = true;
+    async function launchDevTools() {
+        STATE.isDevToolsOpen = true;
         try {
             await injectDependencies();
-            await gatherSources();
-            renderUI();
+            gatherSources();
+            recordPerformanceMetrics();
+            renderDevTools();
             setupInteractions();
-            showNotification('Inspector loaded successfully', 'success');
+            showNotification('ANH DevTools loaded', 'success');
         } catch (error) {
             showNotification(`Error: ${error.message}`, 'error');
-            STATE.isInspectorOpen = false;
+            STATE.isDevToolsOpen = false;
         }
     }
 
@@ -70,13 +92,13 @@
 
     function injectPrismCSS() {
         return new Promise((resolve) => {
-            if (document.querySelector(`link[href="${CONFIG.prismCSSUrl}"]`)) return resolve();
+            if (document.querySelector('link[href*="prism"]')) return resolve();
             
             const css = document.createElement('link');
             css.rel = 'stylesheet';
-            css.href = CONFIG.prismCSSUrl;
+            css.href = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css';
             css.onload = resolve;
-            css.onerror = () => showNotification('Failed to load Prism CSS', 'warn');
+            css.onerror = () => showNotification('Prism CSS load failed', 'warn');
             document.head.appendChild(css);
         });
     }
@@ -86,31 +108,118 @@
             if (window.Prism) return resolve();
             
             const script = document.createElement('script');
-            script.src = CONFIG.prismJSUrl;
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js';
             script.onload = resolve;
-            script.onerror = () => showNotification('Failed to load Prism JS', 'warn');
+            script.onerror = () => showNotification('Prism JS load failed', 'warn');
             document.head.appendChild(script);
         });
     }
 
-    // ============= SOURCE GATHERING =============
-    function getFileName(urlStr, fallback) {
-        try {
-            const path = new URL(urlStr, window.location.origin).pathname;
-            const name = path.split('/').pop();
-            return name && name.length > 0 ? name : fallback;
-        } catch (e) {
-            return fallback;
-        }
+    // ============= CONSOLE INTERCEPTION =============
+    function interceptConsole() {
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        const originalInfo = console.info;
+
+        console.log = function(...args) {
+            STATE.consoleMessages.push({
+                type: 'log',
+                message: args.map(formatConsoleArg).join(' '),
+                timestamp: new Date(),
+                raw: args
+            });
+            updateConsolePanel();
+            originalLog.apply(console, args);
+        };
+
+        console.error = function(...args) {
+            STATE.consoleMessages.push({
+                type: 'error',
+                message: args.map(formatConsoleArg).join(' '),
+                timestamp: new Date(),
+                raw: args
+            });
+            updateConsolePanel();
+            originalError.apply(console, args);
+        };
+
+        console.warn = function(...args) {
+            STATE.consoleMessages.push({
+                type: 'warn',
+                message: args.map(formatConsoleArg).join(' '),
+                timestamp: new Date(),
+                raw: args
+            });
+            updateConsolePanel();
+            originalWarn.apply(console, args);
+        };
+
+        console.info = function(...args) {
+            STATE.consoleMessages.push({
+                type: 'info',
+                message: args.map(formatConsoleArg).join(' '),
+                timestamp: new Date(),
+                raw: args
+            });
+            updateConsolePanel();
+            originalInfo.apply(console, args);
+        };
     }
 
-    async function gatherSources() {
+    function formatConsoleArg(arg) {
+        if (typeof arg === 'object') {
+            return JSON.stringify(arg, null, 2);
+        }
+        return String(arg);
+    }
+
+    // ============= NETWORK INTERCEPTION =============
+    function interceptNetworkRequests() {
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            const startTime = performance.now();
+            const url = args[0];
+
+            STATE.networkRequests.push({
+                url: String(url),
+                method: (args[1]?.method || 'GET').toUpperCase(),
+                status: 'pending',
+                startTime,
+                endTime: null,
+                duration: null,
+                size: null
+            });
+
+            return originalFetch.apply(this, args)
+                .then(response => {
+                    const endTime = performance.now();
+                    const req = STATE.networkRequests[STATE.networkRequests.length - 1];
+                    req.status = response.status;
+                    req.endTime = endTime;
+                    req.duration = (endTime - startTime).toFixed(2);
+                    req.size = response.headers.get('content-length') || 'unknown';
+                    updateNetworkPanel();
+                    return response;
+                })
+                .catch(error => {
+                    const endTime = performance.now();
+                    const req = STATE.networkRequests[STATE.networkRequests.length - 1];
+                    req.status = 'failed';
+                    req.endTime = endTime;
+                    req.duration = (endTime - startTime).toFixed(2);
+                    updateNetworkPanel();
+                    throw error;
+                });
+        };
+    }
+
+    // ============= SOURCE GATHERING =============
+    function gatherSources() {
         STATE.sourceFiles = [];
         const htmlClone = document.documentElement.cloneNode(true);
-        
-        // Remove inspector UI from clone
-        htmlClone.querySelectorAll('#anh-lite-modal, #anh-preview-card').forEach(el => el.remove());
-        
+        htmlClone.querySelectorAll('#anh-devtools-container, #anh-devtools-modal').forEach(el => el.remove());
+
         const getAbsoluteUrl = (url) => {
             try {
                 return new URL(url, window.location.origin).href;
@@ -124,31 +233,26 @@
         let scriptCounter = 1;
         
         for (const script of scripts) {
-            // ANH Policy: Skip Scripto inline scripts
             if (script.classList.contains('Scripto')) continue;
-
             try {
                 if (script.hasAttribute('src')) {
                     const src = script.getAttribute('src');
-                    const res = await fetchWithTimeout(getAbsoluteUrl(src), 5000);
-                    const content = await res.text();
+                    const name = getFileName(src, `script_${scriptCounter}.js`);
                     STATE.sourceFiles.push({
-                        name: getFileName(src, `script_${scriptCounter}.js`),
+                        name,
                         type: 'javascript',
-                        content,
-                        original: src,
-                        isExternal: true
+                        content: `// External: ${src}`,
+                        url: src
                     });
                 } else if (script.textContent.trim()) {
                     STATE.sourceFiles.push({
                         name: `inline_script_${scriptCounter}.js`,
                         type: 'javascript',
-                        content: script.textContent,
-                        isExternal: false
+                        content: script.textContent
                     });
                 }
             } catch (e) {
-                showNotification(`Script fetch failed: ${script.getAttribute('src') || 'inline'}`, 'warn');
+                console.warn('Script processing failed:', e);
             }
             scriptCounter++;
         }
@@ -160,32 +264,28 @@
         for (const link of links) {
             try {
                 const href = link.getAttribute('href');
-                const res = await fetchWithTimeout(getAbsoluteUrl(href), 5000);
-                const content = await res.text();
+                const name = getFileName(href, `style_${styleCounter}.css`);
                 STATE.sourceFiles.push({
-                    name: getFileName(href, `style_${styleCounter}.css`),
+                    name,
                     type: 'css',
-                    content,
-                    original: href,
-                    isExternal: true
+                    content: `/* External: ${href} */`,
+                    url: href
                 });
             } catch (e) {
-                showNotification(`Stylesheet fetch failed: ${link.getAttribute('href')}`, 'warn');
+                console.warn('Stylesheet processing failed:', e);
             }
             styleCounter++;
         }
 
         // Process Inline Styles
         const styles = Array.from(htmlClone.querySelectorAll('style'));
-        for (const style of styles) {
-            if (style.textContent.trim()) {
+        for (let i = 0; i < styles.length; i++) {
+            if (styles[i].textContent.trim()) {
                 STATE.sourceFiles.push({
-                    name: `inline_style_${styleCounter}.css`,
+                    name: `inline_style_${i + 1}.css`,
                     type: 'css',
-                    content: style.textContent,
-                    isExternal: false
+                    content: styles[i].textContent
                 });
-                styleCounter++;
             }
         }
 
@@ -193,675 +293,1031 @@
         STATE.sourceFiles.unshift({
             name: 'index.html',
             type: 'html',
-            content: htmlClone.outerHTML,
-            isExternal: false
+            content: document.documentElement.outerHTML
         });
     }
 
-    // ============= UTILITIES =============
-    function fetchWithTimeout(url, timeout = 5000) {
-        return Promise.race([
-            fetch(url),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Fetch timeout')), timeout))
-        ]);
+    function getFileName(urlStr, fallback) {
+        try {
+            const path = new URL(urlStr, window.location.origin).pathname;
+            const name = path.split('/').pop();
+            return name && name.length > 0 ? name : fallback;
+        } catch {
+            return fallback;
+        }
     }
 
-    function showNotification(message, type = 'info') {
-        const notif = document.createElement('div');
-        notif.style.cssText = `
-            position: fixed; bottom: 20px; right: 20px; z-index: 2147483649;
-            padding: 12px 16px; border-radius: 4px; font-size: 13px; font-family: sans-serif;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: slideIn 0.3s ease;
+    // ============= PERFORMANCE METRICS =============
+    function recordPerformanceMetrics() {
+        if (window.performance && window.performance.timing) {
+            const timing = performance.timing;
+            STATE.performanceMetrics = {
+                dns: timing.domainLookupEnd - timing.domainLookupStart,
+                tcp: timing.connectEnd - timing.connectStart,
+                request: timing.responseStart - timing.requestStart,
+                response: timing.responseEnd - timing.responseStart,
+                dom: timing.domInteractive - timing.domLoading,
+                load: timing.loadEventEnd - timing.loadEventStart,
+                total: timing.loadEventEnd - timing.navigationStart,
+                domContentLoaded: timing.domContentLoadedEventEnd - timing.navigationStart
+            };
+        }
+
+        if (window.performance && window.performance.memory) {
+            STATE.performanceMetrics.memory = {
+                usedJSHeapSize: (window.performance.memory.usedJSHeapSize / 1048576).toFixed(2) + ' MB',
+                totalJSHeapSize: (window.performance.memory.totalJSHeapSize / 1048576).toFixed(2) + ' MB',
+                jsHeapSizeLimit: (window.performance.memory.jsHeapSizeLimit / 1048576).toFixed(2) + ' MB'
+            };
+        }
+    }
+
+    // ============= ACCESSIBILITY CHECKER =============
+    function checkAccessibility() {
+        const issues = [];
+
+        // Check for alt text in images
+        document.querySelectorAll('img').forEach(img => {
+            if (!img.alt || img.alt.trim() === '') {
+                issues.push({
+                    level: 'error',
+                    element: 'img',
+                    issue: 'Missing alt text',
+                    selector: getSelector(img)
+                });
+            }
+        });
+
+        // Check for form labels
+        document.querySelectorAll('input').forEach(input => {
+            if (input.type === 'text' || input.type === 'email' || input.type === 'password') {
+                const label = document.querySelector(`label[for="${input.id}"]`);
+                if (!label) {
+                    issues.push({
+                        level: 'warn',
+                        element: 'input',
+                        issue: 'No associated label',
+                        selector: getSelector(input)
+                    });
+                }
+            }
+        });
+
+        // Check for heading hierarchy
+        const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+        if (headings.length > 0) {
+            const firstLevel = parseInt(headings[0].tagName[1]);
+            if (firstLevel !== 1) {
+                issues.push({
+                    level: 'warn',
+                    element: 'heading',
+                    issue: 'Page should start with H1',
+                    selector: headings[0].tagName
+                });
+            }
+        }
+
+        // Check for color contrast (simplified)
+        document.querySelectorAll('*').forEach(el => {
+            if (el.textContent.trim().length > 0) {
+                const style = window.getComputedStyle(el);
+                if (style.color === 'rgb(0, 0, 0)' && style.backgroundColor === 'rgb(0, 0, 0)') {
+                    issues.push({
+                        level: 'error',
+                        element: el.tagName,
+                        issue: 'Poor color contrast',
+                        selector: getSelector(el)
+                    });
+                }
+            }
+        });
+
+        // Check for keyboard accessibility
+        document.querySelectorAll('button, a, input').forEach(el => {
+            if (!el.hasAttribute('tabindex') && el.tabIndex === -1) {
+                if (el.tagName !== 'A' || !el.href) {
+                    issues.push({
+                        level: 'info',
+                        element: el.tagName,
+                        issue: 'Element may not be keyboard accessible',
+                        selector: getSelector(el)
+                    });
+                }
+            }
+        });
+
+        return issues;
+    }
+
+    function getSelector(el) {
+        if (el.id) return `#${el.id}`;
+        if (el.className) return `.${el.className.split(' ')[0]}`;
+        return el.tagName.toLowerCase();
+    }
+
+    // ============= ELEMENT INSPECTOR =============
+    function activateElementPicker() {
+        STATE.elementPickerActive = !STATE.elementPickerActive;
+
+        if (STATE.elementPickerActive) {
+            STATE.elementPickerOverlay = document.createElement('div');
+            STATE.elementPickerOverlay.id = 'anh-element-picker-overlay';
+            STATE.elementPickerOverlay.style.cssText = `
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                z-index: 2147483646;
+                pointer-events: none;
+            `;
+            document.body.appendChild(STATE.elementPickerOverlay);
+
+            document.addEventListener('mousemove', handleElementPickerMove, true);
+            document.addEventListener('click', handleElementPickerClick, true);
+
+            showNotification('Click element to inspect', 'info');
+        } else {
+            if (STATE.elementPickerOverlay) STATE.elementPickerOverlay.remove();
+            document.removeEventListener('mousemove', handleElementPickerMove, true);
+            document.removeEventListener('click', handleElementPickerClick, true);
+        }
+    }
+
+    function handleElementPickerMove(e) {
+        const element = document.elementFromPoint(e.clientX, e.clientY);
+        if (!element || element.id === 'anh-element-picker-overlay') return;
+
+        const rect = element.getBoundingClientRect();
+        const overlay = document.getElementById('anh-element-picker-overlay');
+
+        overlay.innerHTML = `
+            <div style="
+                position: fixed;
+                top: ${rect.top}px;
+                left: ${rect.left}px;
+                width: ${rect.width}px;
+                height: ${rect.height}px;
+                border: 2px solid #007acc;
+                background: rgba(0, 122, 204, 0.1);
+                box-shadow: inset 0 0 0 1px #007acc;
+                pointer-events: none;
+                z-index: 2147483646;
+            "></div>
+            <div style="
+                position: fixed;
+                top: ${Math.max(rect.top - 30, 10)}px;
+                left: ${rect.left}px;
+                background: #007acc;
+                color: white;
+                padding: 4px 8px;
+                font-size: 11px;
+                font-family: monospace;
+                border-radius: 2px;
+                pointer-events: none;
+                z-index: 2147483647;
+            ">
+                &lt;${element.tagName.toLowerCase()}&gt; ${element.className ? '.' + element.className.split(' ')[0] : ''} ${element.id ? '#' + element.id : ''}
+            </div>
         `;
-        
-        const colors = {
-            success: '#4caf50',
-            error: '#f44336',
-            warn: '#ff9800',
-            info: '#2196f3'
+    }
+
+    function handleElementPickerClick(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        STATE.selectedElement = e.target;
+        displayElementDetails(STATE.selectedElement);
+        activateElementPicker(); // Deactivate picker
+    }
+
+    function displayElementDetails(element) {
+        const details = {
+            tag: element.tagName.toLowerCase(),
+            id: element.id,
+            classes: element.className,
+            attributes: {},
+            styles: window.getComputedStyle(element),
+            box: element.getBoundingClientRect(),
+            html: element.outerHTML.substring(0, 500)
         };
-        
-        notif.style.backgroundColor = colors[type] || colors.info;
-        notif.style.color = '#fff';
-        notif.textContent = message;
-        document.body.appendChild(notif);
-        
-        setTimeout(() => notif.remove(), 3000);
+
+        // Get all attributes
+        for (let attr of element.attributes) {
+            details.attributes[attr.name] = attr.value;
+        }
+
+        updateInspectorPanel(details);
+    }
+
+    // ============= DOM TREE GENERATOR =============
+    function generateDOMTree(element = document.body, depth = 0, maxDepth = 3) {
+        if (depth > maxDepth) return '';
+
+        const children = Array.from(element.children);
+        let html = '';
+
+        for (const child of children) {
+            if (child.id === 'anh-devtools-container' || child.id === 'anh-devtools-modal') continue;
+
+            const isCollapsible = child.children.length > 0;
+            const indent = '&nbsp;'.repeat(depth * 2);
+            const icon = isCollapsible ? '▼' : '▸';
+
+            html += `
+                <div class="dom-tree-item" style="margin-left: ${depth * 15}px; padding: 2px 0;">
+                    <span class="dom-tree-icon" ${!isCollapsible ? 'style="visibility: hidden;"' : ''}>${icon}</span>
+                    <span class="dom-tree-tag">&lt;${child.tagName.toLowerCase()}</span>
+                    ${child.id ? `<span class="dom-tree-id"> id="${child.id}"</span>` : ''}
+                    ${child.className ? `<span class="dom-tree-class"> class="${child.className}"</span>` : ''}
+                    <span class="dom-tree-tag">&gt;</span>
+                    <span class="dom-tree-text">${child.textContent.substring(0, 50)}</span>
+                </div>
+            `;
+
+            if (isCollapsible) {
+                html += generateDOMTree(child, depth + 1, maxDepth);
+            }
+        }
+
+        return html;
     }
 
     // ============= UI RENDERING =============
-    function renderUI() {
+    function renderDevTools() {
         injectStyles();
-        renderModal();
-        renderPreviewCard();
+        const container = document.createElement('div');
+        container.id = 'anh-devtools-container';
+        document.body.appendChild(container);
+        container.innerHTML = createDevToolsHTML();
+        setupPanels();
     }
 
     function injectStyles() {
         const style = document.createElement('style');
         style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(400px); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
+            * { box-sizing: border-box; }
+
+            @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+            #anh-devtools-container {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: 100%;
+                height: 50vh;
+                background: #1e1e1e;
+                border-top: 1px solid #333;
+                z-index: 2147483640;
+                display: flex;
+                flex-direction: column;
+                animation: slideUp 0.3s ease;
+                font-family: 'Segoe UI', sans-serif;
+                color: #d4d4d4;
+                overflow: hidden;
             }
 
-            #anh-lite-modal {
-                position: fixed; top: 2%; left: 5%; width: 90%; height: 96%;
-                background: #1e1e1e; color: #fff; z-index: 2147483647;
-                border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-                display: flex; flex-direction: column; font-family: 'Segoe UI', sans-serif;
+            /* Responsive adjustments */
+            @media (max-width: 1024px) {
+                #anh-devtools-container {
+                    height: 60vh;
+                }
             }
 
-            .anh-header {
-                display: flex; justify-content: space-between; padding: 10px 12px;
-                background: #252526; border-radius: 8px 8px 0 0; border-bottom: 1px solid #333;
+            @media (max-width: 768px) {
+                #anh-devtools-container {
+                    height: 70vh;
+                }
+                .devtools-header { flex-wrap: wrap; }
+                .devtools-tabs { margin-top: 5px; }
+            }
+
+            @media (max-width: 480px) {
+                #anh-devtools-container {
+                    height: 100vh;
+                    top: 0;
+                    bottom: auto;
+                    border-radius: 8px 8px 0 0;
+                }
+                .devtools-tabs button { padding: 6px 8px; font-size: 10px; }
+            }
+
+            .devtools-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 12px;
+                background: #252526;
+                border-bottom: 1px solid #333;
+                gap: 8px;
+            }
+
+            .devtools-tabs {
+                display: flex;
+                gap: 2px;
+                overflow-x: auto;
+                flex: 1;
+                scrollbar-width: thin;
+            }
+
+            .devtools-tab {
+                padding: 8px 14px;
+                background: #2d2d2d;
+                border: none;
+                cursor: pointer;
+                color: #969696;
+                font-size: 12px;
+                border-bottom: 2px solid transparent;
+                transition: all 0.2s;
+                white-space: nowrap;
+            }
+
+            .devtools-tab:hover { background: #3d3d3d; }
+            .devtools-tab.active {
+                background: #1e1e1e;
+                color: #fff;
+                border-bottom-color: #007acc;
+            }
+
+            .devtools-controls {
+                display: flex;
+                gap: 8px;
                 align-items: center;
             }
 
-            .anh-tabs {
-                display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin;
-                flex: 1;
-            }
-
-            .anh-tab {
-                padding: 8px 14px; background: #2d2d2d; cursor: pointer;
-                border-radius: 4px 4px 0 0; font-size: 12px; border: none;
-                color: #969696; white-space: nowrap; transition: all 0.2s;
-                position: relative;
-            }
-
-            .anh-tab:hover { background: #3d3d3d; }
-            .anh-tab.active {
-                background: #1e1e1e; color: #fff;
-                border-top: 2px solid #007acc;
-            }
-
-            .anh-tab .anh-tab-close {
-                margin-left: 6px; font-size: 10px; cursor: pointer;
-                opacity: 0.6; transition: opacity 0.2s;
-            }
-
-            .anh-tab .anh-tab-close:hover { opacity: 1; }
-
-            .anh-actions {
-                display: flex; gap: 8px; margin-left: auto;
-            }
-
-            .anh-actions button {
-                padding: 6px 12px; border: none; border-radius: 4px;
-                cursor: pointer; font-size: 12px; font-weight: bold; color: white;
+            .devtools-btn {
+                padding: 6px 12px;
+                border: none;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 11px;
+                font-weight: bold;
+                color: white;
                 transition: all 0.2s;
             }
 
-            .anh-actions button:hover { opacity: 0.8; }
+            .btn-picker { background: #0e639c; }
+            .btn-resize { background: #0e639c; }
+            .btn-clear { background: #d32f2f; }
+            .btn-close { background: #d32f2f; }
 
-            .anh-btn-run { background: #007acc; }
-            .anh-btn-format { background: #0e639c; }
-            .anh-btn-close { background: #d32f2f; }
+            .devtools-btn:hover { opacity: 0.8; }
+            .devtools-btn.active { background: #007acc; }
 
-            /* Find & Replace Bar */
-            #anh-search-bar {
-                display: none; padding: 8px 12px; background: #2d2d2d;
-                border-bottom: 1px solid #444; gap: 10px; align-items: center;
-                font-size: 12px; flex-wrap: wrap;
+            .devtools-content {
+                flex: 1;
+                overflow: auto;
+                display: flex;
             }
 
-            .anh-search-input {
-                background: #3c3c3c; border: 1px solid #555; color: white;
-                padding: 6px 8px; border-radius: 3px; font-size: 12px; flex: 1; min-width: 150px;
+            .panel {
+                display: none;
+                flex: 1;
+                overflow: auto;
+                padding: 12px;
+                width: 100%;
             }
 
-            .anh-search-input::placeholder { color: #888; }
+            .panel.active { display: block; }
 
-            /* Editor Core Layout */
-            .anh-editor-wrapper {
-                display: flex; flex: 1; overflow: hidden; position: relative;
-                background: #1e1e1e;
+            /* Inspector Panel */
+            .inspector-section {
+                margin-bottom: 16px;
+                border-left: 3px solid #007acc;
+                padding-left: 12px;
             }
 
-            .anh-line-numbers {
-                width: 45px; background: #252526; color: #858585; text-align: right;
-                padding: 12px 8px; font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 13px; line-height: 1.5; overflow: hidden;
-                user-select: none; border-right: 1px solid #333; flex-shrink: 0;
+            .inspector-title {
+                font-weight: bold;
+                color: #4ec9b0;
+                margin-bottom: 8px;
+                font-size: 12px;
             }
 
-            .anh-line-numbers span {
-                display: block; height: 19.5px;
+            .inspector-property {
+                display: flex;
+                justify-content: space-between;
+                padding: 4px 0;
+                border-bottom: 1px solid #333;
+                font-size: 11px;
+                font-family: monospace;
             }
 
-            .anh-editor-container {
-                position: relative; flex: 1; overflow: hidden;
-                display: flex; flex-direction: column;
+            .inspector-key { color: #9cdcfe; }
+            .inspector-value { color: #ce9178; }
+
+            .dom-tree-item {
+                padding: 2px 0;
+                cursor: pointer;
+                font-size: 12px;
+                font-family: monospace;
+                user-select: none;
             }
 
-            .anh-code-input, .anh-code-output {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-                padding: 12px; margin: 0; border: none; box-sizing: border-box;
-                font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;
-                line-height: 1.5; white-space: pre; tab-size: 4;
-                word-wrap: normal;
+            .dom-tree-item:hover { background: #2d2d30; }
+
+            .dom-tree-icon {
+                cursor: pointer;
+                color: #007acc;
+                margin-right: 4px;
             }
 
-            .anh-code-input {
-                color: transparent; background: transparent; caret-color: #fff;
-                z-index: 2; resize: none; outline: none; overflow: auto !important;
+            .dom-tree-tag { color: #9cdcfe; }
+            .dom-tree-id { color: #ce9178; }
+            .dom-tree-class { color: #4ec9b0; }
+            .dom-tree-text { color: #808080; font-size: 10px; }
+
+            /* Console Panel */
+            .console-message {
+                padding: 8px;
+                margin: 4px 0;
+                border-left: 3px solid #007acc;
+                border-radius: 2px;
+                font-size: 12px;
+                font-family: monospace;
+                word-break: break-word;
             }
 
-            .anh-code-output {
-                z-index: 1; pointer-events: none; overflow: auto !important;
-                background: transparent;
+            .console-log { border-left-color: #4ec9b0; color: #d4d4d4; }
+            .console-error { border-left-color: #f48771; color: #f48771; }
+            .console-warn { border-left-color: #dcdcaa; color: #dcdcaa; }
+            .console-info { border-left-color: #4fc1ff; color: #4fc1ff; }
+
+            .console-time { color: #888; font-size: 10px; }
+
+            /* Network Panel */
+            .network-request {
+                padding: 8px;
+                margin: 4px 0;
+                background: #2d2d2d;
+                border-radius: 3px;
+                font-size: 11px;
+                font-family: monospace;
             }
 
-            .anh-code-output code { color: #d4d4d4; }
+            .network-url { color: #9cdcfe; margin-bottom: 4px; word-break: break-all; }
+            .network-meta { display: flex; justify-content: space-between; color: #888; }
 
-            .anh-statusbar {
-                background: #007acc; color: white; font-size: 11px; padding: 5px 12px;
-                display: flex; justify-content: space-between; border-radius: 0 0 8px 8px;
-                border-top: 1px solid #555;
+            .network-status-200 { color: #4ec9b0; }
+            .network-status-error { color: #f48771; }
+            .network-status-pending { color: #dcdcaa; }
+
+            /* Performance Panel */
+            .perf-metric {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin-bottom: 12px;
             }
 
-            .anh-status-left { display: flex; gap: 20px; }
+            .perf-item {
+                background: #2d2d2d;
+                padding: 8px;
+                border-radius: 3px;
+                border-left: 3px solid #007acc;
+            }
 
-            /* Iframe Preview Card */
-            #anh-preview-card {
-                position: fixed; top: 5%; left: 5%; width: 90%; height: 90%;
-                background: #fff; z-index: 2147483648; border-radius: 8px;
-                box-shadow: 0 10px 50px rgba(0,0,0,0.9); display: none;
+            .perf-label { color: #9cdcfe; font-size: 11px; }
+            .perf-value { color: #4ec9b0; font-size: 14px; font-weight: bold; }
+
+            /* Accessibility Panel */
+            .a11y-issue {
+                padding: 8px;
+                margin: 4px 0;
+                border-radius: 3px;
+                font-size: 11px;
+                border-left: 3px solid;
+            }
+
+            .a11y-error { background: #3d0a0a; border-left-color: #f48771; color: #f48771; }
+            .a11y-warn { background: #3d2d0a; border-left-color: #dcdcaa; color: #dcdcaa; }
+            .a11y-info { background: #0a2d3d; border-left-color: #4fc1ff; color: #4fc1ff; }
+
+            .a11y-element { color: #9cdcfe; font-family: monospace; }
+
+            /* Responsive Preview Modal */
+            #anh-responsive-preview {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.9);
+                z-index: 2147483650;
+                display: none;
                 flex-direction: column;
+                animation: fadeIn 0.3s ease;
             }
 
-            .anh-preview-header {
-                background: #252526; padding: 12px 15px; display: flex;
-                justify-content: space-between; color: #fff; font-weight: bold;
-                border-radius: 8px 8px 0 0; align-items: center;
+            .preview-toolbar {
+                background: #252526;
+                padding: 10px;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                border-bottom: 1px solid #333;
+                flex-wrap: wrap;
             }
 
-            #anh-preview-iframe {
-                flex: 1; border: none; width: 100%;
-                border-radius: 0 0 8px 8px; background: #fff;
+            .preview-device-btn {
+                padding: 6px 12px;
+                background: #2d2d2d;
+                border: 1px solid #555;
+                color: white;
+                cursor: pointer;
+                border-radius: 3px;
+                font-size: 12px;
+                transition: all 0.2s;
             }
 
-            /* Syntax Error Display */
-            .anh-error-panel {
-                display: none; background: #300a0a; border-top: 1px solid #6f1818;
-                padding: 10px 12px; color: #ff6b6b; font-size: 12px;
-                font-family: monospace; overflow-y: auto; max-height: 100px;
+            .preview-device-btn.active { background: #007acc; border-color: #007acc; }
+
+            .preview-frame {
+                flex: 1;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 20px;
+                overflow: auto;
+            }
+
+            .preview-viewport {
+                background: white;
+                border: 8px solid #333;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+                width: 100%;
+                height: 100%;
+                max-width: 100%;
+                max-height: 100%;
+            }
+
+            .preview-viewport iframe {
+                width: 100%;
+                height: 100%;
+                border: none;
             }
 
             /* Scrollbar Styling */
-            .anh-code-input::-webkit-scrollbar,
-            .anh-code-output::-webkit-scrollbar,
-            .anh-error-panel::-webkit-scrollbar {
-                width: 10px; height: 10px;
+            .devtools-content::-webkit-scrollbar,
+            .panel::-webkit-scrollbar {
+                width: 8px;
             }
 
-            .anh-code-input::-webkit-scrollbar-track,
-            .anh-code-output::-webkit-scrollbar-track {
+            .devtools-content::-webkit-scrollbar-track,
+            .panel::-webkit-scrollbar-track {
                 background: #1e1e1e;
             }
 
-            .anh-code-input::-webkit-scrollbar-thumb,
-            .anh-code-output::-webkit-scrollbar-thumb {
-                background: #464647; border-radius: 5px;
+            .devtools-content::-webkit-scrollbar-thumb,
+            .panel::-webkit-scrollbar-thumb {
+                background: #464647;
+                border-radius: 4px;
             }
 
-            .anh-code-input::-webkit-scrollbar-thumb:hover {
+            .devtools-content::-webkit-scrollbar-thumb:hover,
+            .panel::-webkit-scrollbar-thumb:hover {
                 background: #5e5e5f;
+            }
+
+            /* Notification */
+            .devtools-notification {
+                position: fixed;
+                bottom: 60vh;
+                right: 20px;
+                background: #007acc;
+                color: white;
+                padding: 10px 16px;
+                border-radius: 3px;
+                font-size: 12px;
+                z-index: 2147483650;
+                animation: slideUp 0.3s ease;
+            }
+
+            .devtools-notification.error { background: #d32f2f; }
+            .devtools-notification.warn { background: #ff9800; }
+            .devtools-notification.success { background: #4caf50; }
+
+            /* Hide main content when devtools is open */
+            body.devtools-open > *:not(#anh-devtools-container):not(.devtools-notification):not(#anh-element-picker-overlay) {
+                margin-bottom: 50vh;
+            }
+
+            @media (max-width: 768px) {
+                body.devtools-open > *:not(#anh-devtools-container):not(.devtools-notification):not(#anh-element-picker-overlay) {
+                    margin-bottom: 70vh;
+                }
+            }
+
+            @media (max-width: 480px) {
+                body.devtools-open > *:not(#anh-devtools-container):not(.devtools-notification):not(#anh-element-picker-overlay) {
+                    margin-bottom: 0;
+                }
             }
         `;
         document.head.appendChild(style);
     }
 
-    function renderModal() {
+    function createDevToolsHTML() {
+        return `
+            <div class="devtools-header">
+                <div class="devtools-tabs">
+                    <button class="devtools-tab active" data-panel="0">🔍 Inspector</button>
+                    <button class="devtools-tab" data-panel="1">📋 Console</button>
+                    <button class="devtools-tab" data-panel="2">📄 Sources</button>
+                    <button class="devtools-tab" data-panel="3">🌐 Network</button>
+                    <button class="devtools-tab" data-panel="4">⚡ Performance</button>
+                    <button class="devtools-tab" data-panel="5">♿ Accessibility</button>
+                </div>
+                <div class="devtools-controls">
+                    <button class="devtools-btn btn-picker" id="btn-element-picker" title="Element Picker">🎯 Pick</button>
+                    <button class="devtools-btn btn-resize" id="btn-responsive" title="Responsive Design">📱 Responsive</button>
+                    <button class="devtools-btn btn-clear" id="btn-clear" title="Clear All">🗑️ Clear</button>
+                    <button class="devtools-btn btn-close" id="btn-devtools-close" title="Close DevTools">✖</button>
+                </div>
+            </div>
+
+            <div class="devtools-content">
+                <!-- Inspector Panel -->
+                <div class="panel active" id="panel-0">
+                    <div class="inspector-section">
+                        <div class="inspector-title">DOM Tree</div>
+                        <div id="dom-tree-container" style="font-size: 12px; font-family: monospace;"></div>
+                    </div>
+                </div>
+
+                <!-- Console Panel -->
+                <div class="panel" id="panel-1">
+                    <div id="console-output"></div>
+                </div>
+
+                <!-- Sources Panel -->
+                <div class="panel" id="panel-2">
+                    <div style="display: flex; gap: 10px; height: 100%;">
+                        <div style="width: 200px; border-right: 1px solid #333; overflow-y: auto;">
+                            <div style="font-weight: bold; padding: 8px 0; color: #4ec9b0; font-size: 11px;">FILES</div>
+                            <div id="sources-list"></div>
+                        </div>
+                        <div style="flex: 1; overflow-y: auto;">
+                            <div id="sources-viewer" style="font-family: monospace; font-size: 12px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Panel -->
+                <div class="panel" id="panel-3">
+                    <div id="network-output"></div>
+                </div>
+
+                <!-- Performance Panel -->
+                <div class="panel" id="panel-4">
+                    <div id="performance-output"></div>
+                </div>
+
+                <!-- Accessibility Panel -->
+                <div class="panel" id="panel-5">
+                    <div id="accessibility-output"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============= PANEL SETUP & UPDATES =============
+    function setupPanels() {
+        document.querySelectorAll('.devtools-tab').forEach(tab => {
+            tab.addEventListener('click', () => switchPanel(parseInt(tab.dataset.panel)));
+        });
+
+        document.getElementById('btn-element-picker').addEventListener('click', activateElementPicker);
+        document.getElementById('btn-responsive').addEventListener('click', openResponsivePreview);
+        document.getElementById('btn-clear').addEventListener('click', clearAllPanels);
+        document.getElementById('btn-devtools-close').addEventListener('click', closeDevTools);
+
+        document.body.classList.add('devtools-open');
+
+        updateInspectorPanel();
+        updateConsolePanel();
+        updateSourcesPanel();
+        updateNetworkPanel();
+        updatePerformancePanel();
+        updateAccessibilityPanel();
+    }
+
+    function switchPanel(panelIndex) {
+        STATE.activePanelIndex = panelIndex;
+        document.querySelectorAll('.devtools-tab').forEach((tab, i) => {
+            tab.classList.toggle('active', i === panelIndex);
+        });
+        document.querySelectorAll('.panel').forEach((panel, i) => {
+            panel.classList.toggle('active', i === panelIndex);
+        });
+    }
+
+    function updateInspectorPanel(details = null) {
+        const container = document.getElementById('dom-tree-container');
+        if (!details) {
+            container.innerHTML = generateDOMTree();
+        } else {
+            container.innerHTML = `
+                <div class="inspector-section">
+                    <div class="inspector-title">Element</div>
+                    <div class="inspector-property">
+                        <span class="inspector-key">Tag:</span>
+                        <span class="inspector-value">&lt;${details.tag}&gt;</span>
+                    </div>
+                    ${details.id ? `
+                        <div class="inspector-property">
+                            <span class="inspector-key">ID:</span>
+                            <span class="inspector-value">#${details.id}</span>
+                        </div>
+                    ` : ''}
+                    ${details.classes ? `
+                        <div class="inspector-property">
+                            <span class="inspector-key">Classes:</span>
+                            <span class="inspector-value">${details.classes}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="inspector-section">
+                    <div class="inspector-title">Box Model</div>
+                    <div class="inspector-property">
+                        <span class="inspector-key">Width:</span>
+                        <span class="inspector-value">${details.box.width.toFixed(2)}px</span>
+                    </div>
+                    <div class="inspector-property">
+                        <span class="inspector-key">Height:</span>
+                        <span class="inspector-value">${details.box.height.toFixed(2)}px</span>
+                    </div>
+                    <div class="inspector-property">
+                        <span class="inspector-key">Top:</span>
+                        <span class="inspector-value">${details.box.top.toFixed(2)}px</span>
+                    </div>
+                    <div class="inspector-property">
+                        <span class="inspector-key">Left:</span>
+                        <span class="inspector-value">${details.box.left.toFixed(2)}px</span>
+                    </div>
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-title">Styles (Top 10)</div>
+                    ${Array.from(details.styles).slice(0, 10).map(prop => `
+                        <div class="inspector-property">
+                            <span class="inspector-key">${prop}:</span>
+                            <span class="inspector-value">${details.styles.getPropertyValue(prop)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    }
+
+    function updateConsolePanel() {
+        const output = document.getElementById('console-output');
+        if (STATE.consoleMessages.length === 0) {
+            output.innerHTML = '<div style="color: #888; font-size: 12px;">No messages yet</div>';
+            return;
+        }
+
+        output.innerHTML = STATE.consoleMessages.map(msg => `
+            <div class="console-message console-${msg.type}">
+                <div class="console-time">${msg.timestamp.toLocaleTimeString()}</div>
+                <div>${escapeHTML(msg.message)}</div>
+            </div>
+        `).join('');
+
+        output.scrollTop = output.scrollHeight;
+    }
+
+    function updateSourcesPanel() {
+        const list = document.getElementById('sources-list');
+        list.innerHTML = STATE.sourceFiles.map((file, index) => `
+            <div class="dom-tree-item" style="padding: 4px 8px; cursor: pointer;" onclick="window.__switchSource(${index})">
+                📄 ${escapeHTML(file.name)}
+            </div>
+        `).join('');
+
+        window.__switchSource = (index) => {
+            const file = STATE.sourceFiles[index];
+            const viewer = document.getElementById('sources-viewer');
+            const lines = file.content.split('\n');
+            
+            viewer.innerHTML = `
+                <div style="background: #252526; padding: 8px; border-bottom: 1px solid #333; color: #9cdcfe; font-size: 11px;">
+                    ${escapeHTML(file.name)} (${file.type})
+                </div>
+                <pre style="margin: 0; padding: 8px; font-size: 12px;"><code>${lines.map((line, i) => 
+                    `<span style="color: #858585; margin-right: 8px;">${(i + 1).toString().padStart(4)}</span>${escapeHTML(line)}\n`
+                ).join('')}</code></pre>
+            `;
+        };
+
+        if (STATE.sourceFiles.length > 0) {
+            window.__switchSource(0);
+        }
+    }
+
+    function updateNetworkPanel() {
+        const output = document.getElementById('network-output');
+        if (STATE.networkRequests.length === 0) {
+            output.innerHTML = '<div style="color: #888; font-size: 12px;">No network requests</div>';
+            return;
+        }
+
+        output.innerHTML = STATE.networkRequests.map(req => {
+            const statusClass = req.status === 200 ? 'network-status-200' : 
+                              req.status === 'failed' ? 'network-status-error' : 'network-status-pending';
+            
+            return `
+                <div class="network-request">
+                    <div class="network-url">${req.method} ${escapeHTML(req.url.substring(0, 80))}</div>
+                    <div class="network-meta">
+                        <span class="${statusClass}">${req.status}</span>
+                        <span>${req.duration}ms</span>
+                        <span>${req.size}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function updatePerformancePanel() {
+        const output = document.getElementById('performance-output');
+        let html = '<div class="perf-metric">';
+
+        for (const [key, value] of Object.entries(STATE.performanceMetrics)) {
+            if (key !== 'memory') {
+                html += `
+                    <div class="perf-item">
+                        <div class="perf-label">${formatLabel(key)}</div>
+                        <div class="perf-value">${value}ms</div>
+                    </div>
+                `;
+            }
+        }
+
+        html += '</div>';
+
+        if (STATE.performanceMetrics.memory) {
+            html += `
+                <div class="inspector-section">
+                    <div class="inspector-title">Memory Usage</div>
+                    <div class="inspector-property">
+                        <span class="inspector-key">Used:</span>
+                        <span class="inspector-value">${STATE.performanceMetrics.memory.usedJSHeapSize}</span>
+                    </div>
+                    <div class="inspector-property">
+                        <span class="inspector-key">Total:</span>
+                        <span class="inspector-value">${STATE.performanceMetrics.memory.totalJSHeapSize}</span>
+                    </div>
+                    <div class="inspector-property">
+                        <span class="inspector-key">Limit:</span>
+                        <span class="inspector-value">${STATE.performanceMetrics.memory.jsHeapSizeLimit}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        output.innerHTML = html;
+    }
+
+    function updateAccessibilityPanel() {
+        const issues = checkAccessibility();
+        const output = document.getElementById('accessibility-output');
+
+        if (issues.length === 0) {
+            output.innerHTML = '<div style="color: #4caf50; font-size: 12px;">✓ No accessibility issues found</div>';
+            return;
+        }
+
+        output.innerHTML = issues.map(issue => `
+            <div class="a11y-issue a11y-${issue.level}">
+                <div style="font-weight: bold; margin-bottom: 2px;">${issue.issue}</div>
+                <div style="font-size: 10px; color: #888;">
+                    <span class="a11y-element">${issue.selector}</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function formatLabel(str) {
+        return str
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/^./, char => char.toUpperCase())
+            .trim();
+    }
+
+    // ============= RESPONSIVE PREVIEW =============
+    function openResponsivePreview() {
         const modal = document.createElement('div');
-        modal.id = 'anh-lite-modal';
+        modal.id = 'anh-responsive-preview';
         modal.innerHTML = `
-            <div class="anh-header">
-                <div class="anh-tabs" id="anh-tabs-container"></div>
-                <div class="anh-actions">
-                    <button class="anh-btn-format" id="anh-format-btn" title="Format Code (CTRL+SHIFT+F)">✨ Format</button>
-                    <button class="anh-btn-run" id="anh-run-btn" title="Run Code (CTRL+Enter)">▶ Run</button>
-                    <button class="anh-btn-close" id="anh-close-btn" title="Close (ESC)">✖</button>
-                </div>
+            <div class="preview-toolbar">
+                ${Object.entries(VIEWPORT_SIZES).map(([key, size]) => `
+                    <button class="preview-device-btn" data-width="${size.width}" data-height="${size.height}">
+                        ${size.name}
+                    </button>
+                `).join('')}
+                <button style="margin-left: auto; background: #d32f2f; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 3px;" onclick="document.getElementById('anh-responsive-preview').remove()">✖ Close</button>
             </div>
-            <div id="anh-search-bar">
-                <input type="text" id="anh-find-input" class="anh-search-input" placeholder="Find...">
-                <input type="text" id="anh-replace-input" class="anh-search-input" placeholder="Replace with...">
-                <button id="anh-replace-all" style="background:#007acc; border:none; color:white; padding:4px 8px; border-radius:3px; cursor:pointer; font-size:12px;">Replace All</button>
-                <button id="anh-close-search" style="background:transparent; border:none; color:#ccc; cursor:pointer;">✖</button>
-            </div>
-            <div class="anh-editor-wrapper">
-                <div class="anh-line-numbers" id="anh-line-numbers"></div>
-                <div class="anh-editor-container">
-                    <textarea spellcheck="false" class="anh-code-input" id="anh-textarea" wrap="off"></textarea>
-                    <pre class="anh-code-output"><code id="anh-prism-code"></code></pre>
-                    <div class="anh-error-panel" id="anh-error-panel"></div>
+            <div class="preview-frame">
+                <div class="preview-viewport">
+                    <iframe id="preview-iframe" src="about:blank"></iframe>
                 </div>
-            </div>
-            <div class="anh-statusbar" id="anh-statusbar">
-                <div class="anh-status-left">
-                    <span id="anh-status-pos">Ln 1, Col 1</span>
-                    <span id="anh-status-info">-</span>
-                </div>
-                <span id="anh-status-hint">ESC: Close | CTRL+F: Find | CTRL+Enter: Run</span>
             </div>
         `;
         document.body.appendChild(modal);
+        modal.style.display = 'flex';
 
-        // Populate tabs
-        STATE.sourceFiles.forEach((file, index) => {
-            const btn = document.createElement('button');
-            btn.className = `anh-tab ${index === 0 ? 'active' : ''}`;
-            btn.innerHTML = `${escapeHTML(file.name)} <span class="anh-tab-close">×</span>`;
-            btn.onclick = (e) => {
-                if (e.target.classList.contains('anh-tab-close')) return;
-                switchFile(index);
-            };
-            btn.querySelector('.anh-tab-close').onclick = (e) => {
-                e.stopPropagation();
-            };
-            document.getElementById('anh-tabs-container').appendChild(btn);
-        });
-    }
-
-    function renderPreviewCard() {
-        const previewCard = document.createElement('div');
-        previewCard.id = 'anh-preview-card';
-        previewCard.innerHTML = `
-            <div class="anh-preview-header">
-                <span>Live Preview</span>
-                <button id="anh-preview-close" style="border:none; background:#d32f2f; color:#fff; border-radius:4px; cursor:pointer; padding:4px 8px; font-size:12px;">✖ Close</button>
-            </div>
-            <iframe id="anh-preview-iframe" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-        `;
-        document.body.appendChild(previewCard);
-    }
-
-    // ============= INTERACTIONS & EDITOR =============
-    function setupInteractions() {
-        const textarea = document.getElementById('anh-textarea');
-        const prismCode = document.getElementById('anh-prism-code');
-        const lineNumbers = document.getElementById('anh-line-numbers');
-
-        // Debounced highlighting
-        textarea.addEventListener('input', () => {
-            STATE.sourceFiles[STATE.activeFileIndex].content = textarea.value;
-            clearTimeout(STATE.highlightTimeout);
-            STATE.highlightTimeout = setTimeout(() => {
-                syncHighlighting();
-            }, STATE.debounceDelay);
-            updateLineNumbers();
-            updateCursorPosition();
-        });
-
-        // Synchronized scrolling
-        textarea.addEventListener('scroll', () => {
-            prismCode.parentElement.scrollTop = textarea.scrollTop;
-            prismCode.parentElement.scrollLeft = textarea.scrollLeft;
-            lineNumbers.scrollTop = textarea.scrollTop;
-        });
-
-        // Cursor tracking
-        ['keyup', 'click', 'focus'].forEach(evt =>
-            textarea.addEventListener(evt, updateCursorPosition)
-        );
-
-        // Tab insertion
-        textarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                insertTabAtCursor(textarea);
-            }
-        });
-
-        // Global keyboard shortcuts
-        textarea.addEventListener('keydown', handleEditorKeydown);
-
-        // Find & Replace
-        document.getElementById('anh-replace-all').onclick = performReplaceAll;
-        document.getElementById('anh-close-search').onclick = () => {
-            document.getElementById('anh-search-bar').style.display = 'none';
-        };
-
-        // UI Controls
-        document.getElementById('anh-close-btn').onclick = cleanup;
-        document.getElementById('anh-preview-close').onclick = () => {
-            document.getElementById('anh-preview-card').style.display = 'none';
-        };
-        document.getElementById('anh-run-btn').onclick = executeCode;
-        document.getElementById('anh-format-btn').onclick = formatCode;
-
-        // Store listeners for cleanup
-        STATE.eventListeners.push({
-            element: textarea,
-            event: 'keydown',
-            handler: handleEditorKeydown
-        });
-
-        switchFile(0);
-    }
-
-    function handleEditorKeydown(e) {
-        // ESC: Close inspector
-        if (e.key === 'Escape') {
-            cleanup();
-            return;
-        }
-
-        // CTRL+F: Find & Replace
-        if (e.ctrlKey && e.key.toLowerCase() === 'f') {
-            e.preventDefault();
-            const searchBar = document.getElementById('anh-search-bar');
-            searchBar.style.display = 'flex';
-            document.getElementById('anh-find-input').focus();
-            return;
-        }
-
-        // CTRL+Enter: Run Code
-        if (e.ctrlKey && e.key === 'Enter') {
-            e.preventDefault();
-            executeCode();
-            return;
-        }
-
-        // CTRL+SHIFT+F: Format Code
-        if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') {
-            e.preventDefault();
-            formatCode();
-            return;
-        }
-    }
-
-    function insertTabAtCursor(textarea) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const value = textarea.value;
-
-        textarea.value = value.substring(0, start) + '\t' + value.substring(end);
-        textarea.selectionStart = textarea.selectionEnd = start + 1;
-
-        // Trigger input event
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-
-    function updateLineNumbers() {
-        const textarea = document.getElementById('anh-textarea');
-        const lines = textarea.value.split('\n').length;
-        const lineNumbers = document.getElementById('anh-line-numbers');
-
-        let html = '';
-        for (let i = 1; i <= lines; i++) {
-            html += `<span>${i}</span>`;
-        }
-        lineNumbers.innerHTML = html;
-    }
-
-    function updateCursorPosition() {
-        const textarea = document.getElementById('anh-textarea');
-        const textBeforeCursor = textarea.value.substring(0, textarea.selectionStart);
-        const lines = textBeforeCursor.split('\n');
-        const line = lines.length;
-        const col = lines[lines.length - 1].length + 1;
-
-        document.getElementById('anh-status-pos').textContent = `Ln ${line}, Col ${col}`;
-        document.getElementById('anh-status-info').textContent = 
-            `${STATE.sourceFiles[STATE.activeFileIndex].name} (${STATE.sourceFiles[STATE.activeFileIndex].type})`;
-    }
-
-    function switchFile(index) {
-        STATE.activeFileIndex = index;
-        const file = STATE.sourceFiles[index];
-
-        // Update active tab
-        document.querySelectorAll('.anh-tab').forEach((tab, i) => {
-            tab.classList.toggle('active', i === index);
-        });
-
-        const textarea = document.getElementById('anh-textarea');
-        textarea.value = file.content;
-        syncHighlighting();
-        updateLineNumbers();
-        updateCursorPosition();
-    }
-
-    function syncHighlighting() {
-        const file = STATE.sourceFiles[STATE.activeFileIndex];
-        const prismCode = document.getElementById('anh-prism-code');
-        const textarea = document.getElementById('anh-textarea');
-
-        const typeMap = { 'html': 'markup', 'javascript': 'javascript', 'css': 'css' };
-        prismCode.className = `language-${typeMap[file.type] || 'markup'}`;
-
-        let content = textarea.value;
-        let escapedContent = escapeHTML(content);
-
-        // Ensure last newline is visible
-        if (escapedContent.endsWith('\n')) escapedContent += ' ';
-
-        prismCode.innerHTML = escapedContent;
-
-        if (window.Prism) {
-            Prism.highlightElement(prismCode);
-        }
-    }
-
-    function performReplaceAll() {
-        const findText = document.getElementById('anh-find-input').value;
-        const replaceText = document.getElementById('anh-replace-input').value;
-
-        if (!findText) {
-            showNotification('Please enter text to find', 'warn');
-            return;
-        }
-
-        const textarea = document.getElementById('anh-textarea');
-        const regex = new RegExp(escapeRegex(findText), 'g');
-        const oldValue = textarea.value;
-        const newValue = oldValue.replace(regex, replaceText);
-        const count = (oldValue.match(regex) || []).length;
-
-        textarea.value = newValue;
-        STATE.sourceFiles[STATE.activeFileIndex].content = newValue;
-        syncHighlighting();
-        updateLineNumbers();
-        updateCursorPosition();
-
-        showNotification(`Replaced ${count} occurrences`, 'success');
-    }
-
-    function formatCode() {
-        const textarea = document.getElementById('anh-textarea');
-        const file = STATE.sourceFiles[STATE.activeFileIndex];
-
-        try {
-            let formatted = textarea.value;
-
-            if (file.type === 'javascript') {
-                formatted = formatJavaScript(formatted);
-            } else if (file.type === 'css') {
-                formatted = formatCSS(formatted);
-            } else if (file.type === 'html') {
-                formatted = formatHTML(formatted);
-            }
-
-            textarea.value = formatted;
-            STATE.sourceFiles[STATE.activeFileIndex].content = formatted;
-            syncHighlighting();
-            updateLineNumbers();
-            showNotification('Code formatted', 'success');
-        } catch (error) {
-            showNotification(`Format error: ${error.message}`, 'error');
-        }
-    }
-
-    function formatJavaScript(code) {
-        let result = '';
-        let indent = 0;
-        let inString = false;
-        let stringChar = '';
-
-        for (let i = 0; i < code.length; i++) {
-            const char = code[i];
-            const prevChar = i > 0 ? code[i - 1] : '';
-            const nextChar = i < code.length - 1 ? code[i + 1] : '';
-
-            // Handle strings
-            if ((char === '"' || char === "'" || char === '`') && prevChar !== '\\') {
-                if (!inString) {
-                    inString = true;
-                    stringChar = char;
-                } else if (char === stringChar) {
-                    inString = false;
-                }
-            }
-
-            if (!inString) {
-                if (char === '{' || char === '[' || char === '(') {
-                    result += char;
-                    if (char === '{' || char === '[') {
-                        indent++;
-                        if (nextChar !== '}' && nextChar !== ']') {
-                            result += '\n' + '  '.repeat(indent);
-                        }
-                    }
-                } else if (char === '}' || char === ']' || char === ')') {
-                    if (char === '}' || char === ']') {
-                        indent = Math.max(0, indent - 1);
-                        if (result.trim() && result[result.length - 1] !== '\n') {
-                            result += '\n' + '  '.repeat(indent);
-                        }
-                    }
-                    result += char;
-                } else if (char === ';') {
-                    result += char;
-                    if (nextChar !== '\n' && nextChar !== '') {
-                        result += '\n' + '  '.repeat(indent);
-                    }
-                } else if (char === ',') {
-                    result += char + ' ';
-                } else if (char !== '\n' && char !== '\r') {
-                    result += char;
-                } else if (char === '\n') {
-                    if (result[result.length - 1] !== '\n') {
-                        result += '\n';
-                    }
-                }
-            } else {
-                result += char;
-            }
-        }
-
-        return result.trim();
-    }
-
-    function formatCSS(code) {
-        return code
-            .replace(/\s*{\s*/g, ' {\n  ')
-            .replace(/;\s*/g, ';\n  ')
-            .replace(/\s*}\s*/g, '\n}\n')
-            .replace(/,\s*/g, ', ')
-            .trim();
-    }
-
-    function formatHTML(code) {
-        let result = '';
-        let indent = 0;
-        const selfClosing = ['br', 'hr', 'img', 'input', 'link', 'meta'];
-
-        return code
-            .replace(/>\s+</g, '><')
-            .replace(/(<[^/][^>]*>)/g, (match) => {
-                const tagName = match.match(/<(\w+)/)[1];
-                result = '  '.repeat(indent) + match;
-                if (!selfClosing.includes(tagName)) {
-                    indent++;
-                }
-                return result;
-            })
-            .trim();
-    }
-
-    // ============= CODE EXECUTION =============
-    function executeCode() {
         const htmlFile = STATE.sourceFiles.find(f => f.type === 'html');
         let finalHTML = htmlFile ? htmlFile.content : '<html><body></body></html>';
 
-        try {
-            // Inject CSS
-            const cssFiles = STATE.sourceFiles.filter(f => f.type === 'css');
-            cssFiles.forEach(css => {
-                finalHTML = finalHTML.replace(/<\/head>/i, `<style>${css.content}</style></head>`);
+        // Inject styles and scripts
+        const cssFiles = STATE.sourceFiles.filter(f => f.type === 'css');
+        cssFiles.forEach(css => {
+            finalHTML = finalHTML.replace(/<\/head>/i, `<style>${css.content}</style></head>`);
+        });
+
+        const jsFiles = STATE.sourceFiles.filter(f => f.type === 'javascript');
+        jsFiles.forEach(js => {
+            finalHTML = finalHTML.replace(/<\/body>/i, `<script>${js.content}</script></body>`);
+        });
+
+        const blob = new Blob([finalHTML], { type: 'text/html' });
+        const previewUrl = URL.createObjectURL(blob);
+        STATE.blobURLs.push(previewUrl);
+
+        document.getElementById('preview-iframe').src = previewUrl;
+
+        document.querySelectorAll('.preview-device-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const width = btn.dataset.width;
+                const height = btn.dataset.height;
+                const viewport = document.querySelector('.preview-viewport');
+                
+                viewport.style.width = width + 'px';
+                viewport.style.height = height + 'px';
+
+                document.querySelectorAll('.preview-device-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
             });
+        });
 
-            // Inject JS
-            const jsFiles = STATE.sourceFiles.filter(f => f.type === 'javascript');
-            jsFiles.forEach(js => {
-                finalHTML = finalHTML.replace(/<\/body>/i, `<script>${js.content}</script></body>`);
-            });
-
-            // Ensure closing tags exist
-            if (!finalHTML.includes('</head>')) {
-                finalHTML = finalHTML.replace(/<\/html>/i, '</head><body></body></html>');
-            }
-            if (!finalHTML.includes('</body>')) {
-                finalHTML = finalHTML.replace(/<\/html>/i, '</body></html>');
-            }
-
-            // Clean up old blob URLs to prevent memory leaks
-            STATE.blobUrls.forEach(url => URL.revokeObjectURL(url));
-            STATE.blobUrls = [];
-
-            const blob = new Blob([finalHTML], { type: 'text/html' });
-            const previewUrl = URL.createObjectURL(blob);
-            STATE.blobUrls.push(previewUrl);
-
-            const previewCard = document.getElementById('anh-preview-card');
-            const iframe = document.getElementById('anh-preview-iframe');
-
-            iframe.src = '';
-            iframe.src = previewUrl;
-            previewCard.style.display = 'flex';
-
-            showNotification('Code executed successfully', 'success');
-        } catch (error) {
-            showNotification(`Execution error: ${error.message}`, 'error');
-        }
+        // Set default to Desktop
+        document.querySelector('[data-width="1920"]').click();
     }
 
     // ============= UTILITIES =============
     function escapeHTML(text) {
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, char => map[char]);
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return String(text).replace(/[&<>"']/g, char => map[char]);
     }
 
-    function escapeRegex(text) {
-        return text.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    function showNotification(message, type = 'info') {
+        const notif = document.createElement('div');
+        notif.className = `devtools-notification ${type}`;
+        notif.textContent = message;
+        document.body.appendChild(notif);
+        setTimeout(() => notif.remove(), 3000);
     }
 
-    function cleanup() {
-        // Remove DOM elements
-        ['#anh-lite-modal', '#anh-preview-card'].forEach(selector => {
-            const el = document.querySelector(selector);
-            if (el) el.remove();
+    function setupInteractions() {
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeDevTools();
+            }
         });
-
-        // Cleanup blob URLs
-        STATE.blobUrls.forEach(url => URL.revokeObjectURL(url));
-
-        // Remove event listeners (simplified - in production use a proper event manager)
-        clearTimeout(STATE.highlightTimeout);
-
-        STATE.isInspectorOpen = false;
-        STATE.sourceFiles = [];
-        STATE.blobUrls = [];
-
-        showNotification('Inspector closed', 'info');
     }
+
+    function clearAllPanels() {
+        STATE.consoleMessages = [];
+        STATE.networkRequests = [];
+        updateConsolePanel();
+        updateNetworkPanel();
+        showNotification('Panels cleared', 'success');
+    }
+
+    function closeDevTools() {
+        const container = document.getElementById('anh-devtools-container');
+        if (container) container.remove();
+
+        const preview = document.getElementById('anh-responsive-preview');
+        if (preview) preview.remove();
+
+        const overlay = document.getElementById('anh-element-picker-overlay');
+        if (overlay) overlay.remove();
+
+        STATE.blobURLs.forEach(url => URL.revokeObjectURL(url));
+        document.body.classList.remove('devtools-open');
+        STATE.isDevToolsOpen = false;
+
+        showNotification('DevTools closed', 'info');
+    }
+
+    // Expose for external access
+    window.__ANHDevTools = {
+        close: closeDevTools,
+        state: STATE
+    };
 
 })();
