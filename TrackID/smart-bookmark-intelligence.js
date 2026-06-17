@@ -1,815 +1,695 @@
 /**
  * FILE: smart-bookmark-intelligence.js
  * ARCHITECT: Senior Browser Intelligence Architect
- * ECOSYSTEM: Akshat Network Hub (ANH) / GitHub Pages / Static PWA Frameworks
- * NETWORKING: Read-Only Web Scraping Framework Client-Side (No External Proxies or Cloud Components)
- * STORAGE: IndexedDB (BookmarkIntelligenceDB) for high-capacity local semantic indexes
+ * ECOSYSTEM: Akshat Network Hub (ANH) / Static / PWAs
+ * DESCRIPTION: Advanced client-side intelligent bookmarking, crawling, and metadata extraction system.
  */
 
 (function () {
     'use strict';
 
     // ==================================================================
-    // GLOBAL CONFIGURATION MATRIX
+    // CONFIGURATION & STATE
     // ==================================================================
-    const DB_NAME = 'BookmarkIntelligenceDB';
-    const DB_VERSION = 1;
-    const STORES = {
-        bookmarks: 'bookmarks',
-        metadata: 'metadata_cache',
-        preferences: 'user_preferences',
-        search: 'search_history'
+    const CONFIG = {
+        DB_NAME: 'BookmarkIntelligenceDB',
+        DB_VERSION: 1,
+        STORES: {
+            bookmarks: 'Bookmarks',
+            metadata: 'Metadata',
+            seo: 'SEOScores',
+            schemas: 'GeneratedSchemas',
+            prefs: 'UserPreferences',
+            search: 'SearchHistory'
+        },
+        PANEL_ID: 'anh-bookmark-dashboard-root',
+        UI_Z_INDEX: 2147483647
     };
 
-    let activePanelElement = null;
-    let dbInstance = null;
-    let activeCrawlerAbortController = null;
-    let pressedKeys = new Set();
+    const State = {
+        db: null,
+        pressedKeys: new Set(),
+        dashboardElement: null,
+        isDark: true,
+        bookmarksCache: [],
+        searchQuery: '',
+        activeFilter: 'ALL',
+        activeSort: 'DATE_DESC',
+        crawlerAbortController: null
+    };
 
     // ==================================================================
-    // DATABASE ABSTRACT LAYER (INDEXEDDB FACTORY)
+    // UTILITIES & SANITIZATION
     // ==================================================================
-    const DbFactory = {
-        init() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(DB_NAME, DB_VERSION);
-                
-                request.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains(STORES.bookmarks)) {
-                        db.createObjectStore(STORES.bookmarks, { keyPath: 'url' });
-                    }
-                    if (!db.objectStoreNames.contains(STORES.metadata)) {
-                        db.createObjectStore(STORES.metadata, { keyPath: 'url' });
-                    }
-                    if (!db.objectStoreNames.contains(STORES.preferences)) {
-                        db.createObjectStore(STORES.preferences, { keyPath: 'id' });
-                    }
-                    if (!db.objectStoreNames.contains(STORES.search)) {
-                        db.createObjectStore(STORES.search, { keyPath: 'timestamp' });
-                    }
-                };
-
-                request.onsuccess = (e) => {
-                    dbInstance = e.target.result;
-                    resolve(dbInstance);
-                };
-
-                request.onerror = (e) => reject(e.target.error);
-            });
+    const Utils = {
+        escapeHTML(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
         },
-
-        executeTransaction(storeName, mode, callback) {
-            return new Promise((resolve, reject) => {
-                if (!dbInstance) {
-                    return reject(new Error("Database state uninitialized."));
-                }
-                const transaction = dbInstance.transaction([storeName], mode);
-                const store = transaction.objectStore(storeName);
-                const request = callback(store);
-
-                transaction.oncomplete = () => resolve(request.result);
-                transaction.onerror = (e) => reject(transaction.error || e.target.error);
-            });
+        normalizeUrl(url) {
+            try {
+                const u = new URL(url, window.location.href);
+                return u.origin + u.pathname.replace(/\/$/, "");
+            } catch {
+                return url;
+            }
+        },
+        debounce(func, wait) {
+            let timeout;
+            return function (...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        },
+        generateId() {
+            return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
         }
     };
 
     // ==================================================================
-    // CORE SEMANTIC EXTRACTION ENGINE
+    // DATABASE LAYER (IndexedDB)
     // ==================================================================
-    const MetadataEngine = {
-        extractFromDOM(doc = document, sourceUrl = window.location.href) {
-            const getMeta = (query, attr = 'content') => {
-                const el = doc.querySelector(query);
-                return el ? (el.getAttribute(attr) || '').trim() : '';
+    const DB = {
+        init() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(CONFIG.STORES.bookmarks)) {
+                        const store = db.createObjectStore(CONFIG.STORES.bookmarks, { keyPath: 'url' });
+                        store.createIndex('tier', 'tier', { unique: false });
+                        store.createIndex('seoScore', 'seoScore', { unique: false });
+                        store.createIndex('dateAdded', 'dateAdded', { unique: false });
+                    }
+                    Object.values(CONFIG.STORES).forEach(storeName => {
+                        if (storeName !== CONFIG.STORES.bookmarks && !db.objectStoreNames.contains(storeName)) {
+                            db.createObjectStore(storeName, { keyPath: 'id' });
+                        }
+                    });
+                };
+                req.onsuccess = (e) => {
+                    State.db = e.target.result;
+                    resolve(State.db);
+                };
+                req.onerror = () => reject(req.error);
+            });
+        },
+        async transaction(storeName, mode, callback) {
+            if (!State.db) await this.init();
+            return new Promise((resolve, reject) => {
+                const tx = State.db.transaction([storeName], mode);
+                const store = tx.objectStore(storeName);
+                let result;
+                try {
+                    result = callback(store);
+                } catch (err) {
+                    tx.abort();
+                    return reject(err);
+                }
+                tx.oncomplete = () => resolve(result && result.result !== undefined ? result.result : result);
+                tx.onerror = () => reject(tx.error);
+            });
+        },
+        async getAllBookmarks() {
+            return this.transaction(CONFIG.STORES.bookmarks, 'readonly', store => store.getAll());
+        },
+        async saveBookmark(data) {
+            return this.transaction(CONFIG.STORES.bookmarks, 'readwrite', store => store.put(data));
+        },
+        async deleteBookmark(url) {
+            return this.transaction(CONFIG.STORES.bookmarks, 'readwrite', store => store.delete(url));
+        },
+        async clearAll() {
+            return this.transaction(CONFIG.STORES.bookmarks, 'readwrite', store => store.clear());
+        }
+    };
+
+    // ==================================================================
+    // METADATA EXTRACTION & SMART TAGGING
+    // ==================================================================
+    const IntelligenceEngine = {
+        extractFromDOM(doc = document, sourceUrl = window.location.href, depth = 0) {
+            const getMeta = (sel, attr = 'content') => {
+                const el = doc.querySelector(sel);
+                return el ? el.getAttribute(attr)?.trim() || '' : '';
             };
 
-            const title = doc.title || getMeta('meta[property="og:title"]') || getMeta('meta[name="twitter:title"]') || 'Untitled Page';
-            const description = getMeta('meta[name="description"]') || getMeta('meta[property="og:description"]') || getMeta('meta[name="twitter:description"]');
+            const title = doc.title || getMeta('meta[property="og:title"]') || getMeta('meta[name="twitter:title"]') || 'Untitled';
+            const description = getMeta('meta[name="description"]') || getMeta('meta[property="og:description"]') || '';
             const keywords = getMeta('meta[name="keywords"]');
             
-            // Smart Icon Detection Algorithm
-            let icon = '';
-            const appleIcon = doc.querySelector('link[rel="apple-touch-icon"]');
-            const iconRel = doc.querySelector('link[rel="icon"]');
-            const shortcutIcon = doc.querySelector('link[rel="shortcut icon"]');
-            const ogImg = getMeta('meta[property="og:image"]');
+            // Icon Strategy
+            let icon = getMeta('link[rel="apple-touch-icon"]', 'href') || 
+                       getMeta('link[rel="icon"]', 'href') || 
+                       getMeta('link[rel="shortcut icon"]', 'href') || 
+                       getMeta('meta[property="og:image"]');
+            
+            try { icon = icon ? new URL(icon, sourceUrl).href : new URL('/favicon.ico', sourceUrl).href; } 
+            catch { icon = ''; }
 
-            if (appleIcon && appleIcon.getAttribute('href')) icon = appleIcon.getAttribute('href');
-            else if (iconRel && iconRel.getAttribute('href')) icon = iconRel.getAttribute('href');
-            else if (shortcutIcon && shortcutIcon.getAttribute('href')) icon = shortcutIcon.getAttribute('href');
-            else if (ogImg) icon = ogImg;
-            else icon = new URL('/favicon.ico', sourceUrl).href;
-
-            // Resolve relative URLs using standard base resolution rules
-            try { icon = new URL(icon, sourceUrl).href; } catch { /* Fallback onto raw signature */ }
-
-            // Tag Engine Parsing Pipeline
-            const generatedTags = this.generateSmartTags(title, description, keywords, doc, sourceUrl);
-
-            // SEO Engine Bridge Integration Check
-            let seoScore = null;
-            let trustScore = 70; // Baseline local optimization score
-            let tier = 'TIER-3';
-
+            // ANH Integration
+            let seoScore = null, trustScore = null, tier = 'UNVERIFIED', validationStatus = 'PENDING';
             if (sourceUrl === window.location.href) {
-                // Read alignment from active local runtime script memory context blocks
-                const cacheData = localStorage.getItem("anh_seo_audit_cache");
-                if (cacheData) {
-                    try {
-                        const parsed = JSON.parse(cacheData);
-                        seoScore = parsed.score;
-                    } catch { /* Silent boundary skip */ }
+                if (window.ANH_SEO) {
+                    seoScore = window.ANH_SEO.score || 0;
+                    trustScore = window.ANH_SEO.trust || 0;
                 }
                 if (window.ANH_ID) {
-                    tier = 'TIER-1';
+                    tier = window.ANH_META?.tier || 'TIER-1';
+                    validationStatus = 'VALIDATED';
                     trustScore = 100;
                 }
             }
 
             return {
-                url: sourceUrl,
-                title: title,
-                description: description,
-                keywords: keywords,
-                icon: icon,
+                url: Utils.normalizeUrl(sourceUrl),
+                title,
+                description,
+                keywords,
+                icon,
                 favicon: icon,
-                ogImage: ogImg,
+                ogImage: getMeta('meta[property="og:image"]'),
                 ogTitle: getMeta('meta[property="og:title"]'),
                 ogDescription: getMeta('meta[property="og:description"]'),
                 dateAdded: Date.now(),
                 lastVisited: Date.now(),
-                seoScore: seoScore,
-                trustScore: trustScore,
-                tier: tier,
-                tags: generatedTags,
+                seoScore,
+                trustScore,
+                tier,
+                validationStatus,
+                tags: this.generateTags(title, description, keywords, doc, sourceUrl),
                 sourcePage: window.location.href,
-                crawlDepth: 0
+                crawlDepth: depth
             };
         },
-
-        generateSmartTags(title, desc, keywords, doc, url) {
-            const tagSet = new Set();
-            const sourceText = `${title} ${desc} ${keywords} ${url}`.toLowerCase();
-
-            // Core Ecosystem Keyword Mapping Rules
-            const dictionary = [
-                'seo', 'javascript', 'portfolio', 'quizzone', 'trackerjs',
-                'akshat network hub', 'validationsystem', 'github', 'pwa', 'static'
-            ];
-
-            dictionary.forEach(term => {
-                if (sourceText.includes(term)) {
-                    tagSet.add(term.toUpperCase());
-                }
-            });
-
-            // Extract headings contextual patterns
-            try {
-                const headings = Array.from(doc.querySelectorAll('h1, h2')).slice(0, 4);
-                headings.forEach(h => {
-                    const words = h.textContent.trim().split(/\s+/);
-                    words.forEach(w => {
-                        if (w.length > 5 && /^[a-zA-Z]+$/.test(w)) {
-                            tagSet.add(w.toUpperCase());
-                        }
-                    });
+        generateTags(title, desc, kw, doc, url) {
+            const tags = new Set();
+            const text = `${title} ${desc} ${kw} ${url}`.toLowerCase();
+            const dictionary = ['seo', 'javascript', 'portfolio', 'quizzone', 'trackerjs', 'akshat network hub', 'validationsystem', 'react', 'pwa'];
+            
+            dictionary.forEach(term => { if (text.includes(term)) tags.add(term.toUpperCase()); });
+            
+            Array.from(doc.querySelectorAll('h1, h2')).slice(0, 3).forEach(h => {
+                h.textContent.trim().split(/\s+/).forEach(w => {
+                    if (w.length > 4 && /^[a-zA-Z]+$/.test(w)) tags.add(w.toUpperCase());
                 });
-            } catch { /* DOM capture sandbox containment boundary */ }
-
-            // Route parsing additions
-            try {
-                const paths = new URL(url).pathname.split('/').filter(Boolean);
-                paths.forEach(p => tagSet.add(p.toUpperCase()));
-            } catch { /* Suppress runtime URL string splits failures */ }
-
-            return Array.from(tagSet).slice(0, 8); // Slice bounds rules limits to top 8 tokens
+            });
+            return Array.from(tags).slice(0, 6);
         },
-
-        async crawlTargetNode(targetUrl, depth, currentAbortedSignal) {
-            if (currentAbortedSignal && currentAbortedSignal.aborted) return null;
-            try {
-                const response = await fetch(targetUrl, { signal: currentAbortedSignal });
-                if (!response.ok) return null;
-                const htmlText = await response.text();
-
-                const parser = new DOMParser();
-                const parseDoc = parser.parseFromString(htmlText, 'text/html');
-                const dataset = this.extractFromDOM(parseDoc, targetUrl);
-                dataset.crawlDepth = depth;
-                return dataset;
-            } catch {
-                return null; // Exception isolation context boundary standard definition
-            }
+        generateJSONLD(bookmark) {
+            return {
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": bookmark.title,
+                "description": bookmark.description,
+                "url": bookmark.url,
+                "image": bookmark.icon,
+                "dateCreated": new Date(bookmark.dateAdded).toISOString(),
+                "keywords": bookmark.tags.join(', ')
+            };
         }
     };
 
     // ==================================================================
-    // ADVANCED CRAWLER SUBSYSTEM (DEPTH PIPELINING)
+    // SMART CRAWLER (DEPTH PIPELINE)
     // ==================================================================
-    const DeepCrawlerEngine = {
-        async executeMultiDepthSearch(basePageUrl, onProgressCallback) {
-            if (activeCrawlerAbortController) activeCrawlerAbortController.abort();
-            activeCrawlerAbortController = new AbortController();
-            const signal = activeCrawlerAbortController.signal;
+    const CrawlerEngine = {
+        async crawlTarget(url, depth, signal) {
+            if (signal?.aborted) return null;
+            try {
+                const res = await fetch(url, { signal, headers: { 'Accept': 'text/html' } });
+                if (!res.ok) return null;
+                const html = await res.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                return IntelligenceEngine.extractFromDOM(doc, url, depth);
+            } catch {
+                return null;
+            }
+        },
+        async extractLinks(url, signal, doc = null) {
+            try {
+                if (!doc) {
+                    const res = await fetch(url, { signal });
+                    const text = await res.text();
+                    doc = new DOMParser().parseFromString(text, 'text/html');
+                }
+                const base = new URL(url);
+                return Array.from(doc.querySelectorAll('a[href]'))
+                    .map(a => {
+                        try { return new URL(a.getAttribute('href'), url); } catch { return null; }
+                    })
+                    .filter(u => u && u.hostname === base.hostname && !u.hash)
+                    .map(u => Utils.normalizeUrl(u.href));
+            } catch { return []; }
+        },
+        async runAdvancedCrawl(startUrl) {
+            if (State.crawlerAbortController) State.crawlerAbortController.abort();
+            State.crawlerAbortController = new AbortController();
+            const signal = State.crawlerAbortController.signal;
+            
+            const queue = [{ url: startUrl, depth: 0 }];
+            const visited = new Set([startUrl]);
+            let count = 0;
 
-            const visitedNodes = new Set([basePageUrl]);
-            const processingQueue = [{ url: basePageUrl, depth: 0 }];
-            let savedCounter = 0;
+            // Optional: Visual Notification Trigger
+            UIEngine.showToast("Starting Advanced Deep Crawl (Depth: 2)...");
 
-            while (processingQueue.length > 0) {
+            while (queue.length > 0 && count < 50) { // Safety limit
                 if (signal.aborted) break;
-                const currentNode = processingQueue.shift();
+                const { url, depth } = queue.shift();
+                if (depth > 2) continue;
 
-                if (currentNode.depth > 2) continue;
+                let record = depth === 0 
+                    ? IntelligenceEngine.extractFromDOM(document, url, depth)
+                    : await this.crawlTarget(url, depth, signal);
 
-                try {
-                    let record = null;
-                    if (currentNode.depth === 0) {
-                        record = MetadataEngine.extractFromDOM(document, basePageUrl);
-                    } else {
-                        record = await MetadataEngine.crawlTargetNode(currentNode.url, currentNode.depth, signal);
-                    }
-
-                    if (record) {
-                        await DbFactory.executeTransaction(STORES.bookmarks, 'readwrite', (store) => store.put(record));
-                        savedCounter++;
-                        if (onProgressCallback) onProgressCallback(savedCounter, currentNode.url);
-
-                        // If depth allows, grab next nodes link sequences via anchor extractions
-                        if (currentNode.depth < 2) {
-                            const foundLinks = await this.extractAnchorsFromUrl(currentNode.url, signal, currentNode.depth === 0 ? document : null);
-                            for (let link of foundLinks) {
-                                if (!visitedNodes.has(link) && visitedNodes.size < 40) { // Safety operational boundary size constraint caps
-                                    visitedNodes.add(link);
-                                    processingQueue.push({ url: link, depth: currentNode.depth + 1 });
-                                }
+                if (record) {
+                    await DB.saveBookmark(record);
+                    count++;
+                    
+                    if (depth < 2) {
+                        const links = await this.extractLinks(url, signal, depth === 0 ? document : null);
+                        for (const link of links) {
+                            if (!visited.has(link)) {
+                                visited.add(link);
+                                queue.push({ url: link, depth: depth + 1 });
                             }
                         }
                     }
-                } catch {
-                    /* Silent pipeline mitigation containment layer */
                 }
             }
-            activeCrawlerAbortController = null;
-        },
-
-        async extractAnchorsFromUrl(targetUrl, signal, preLoadedDoc = null) {
-            const collectedUrls = [];
-            try {
-                let doc = preLoadedDoc;
-                if (!doc) {
-                    const response = await fetch(targetUrl, { signal });
-                    if (!response.ok) return [];
-                    const text = await response.text();
-                    doc = new DOMParser().parseFromString(text, 'text/html');
-                }
-
-                const anchors = Array.from(doc.querySelectorAll('a[href]'));
-                const baseUrlObj = new URL(targetUrl);
-
-                for (let a of anchors) {
-                    try {
-                        const rawHref = a.getAttribute('href');
-                        const resolvedUrl = new URL(rawHref, targetUrl);
-                        
-                        // Restrict crawl mapping trajectories parameters inside identical hosting zones safely
-                        if (resolvedUrl.hostname === baseUrlObj.hostname && !rawHref.startsWith('#') && !rawHref.startsWith('javascript:')) {
-                            collectedUrls.push(Helper.normalizeUrl(resolvedUrl.href));
-                        }
-                    } catch { /* Skip invalid structural formats dynamically */ }
-                }
-            } catch { /* Isolated node crawl exceptions blocks */ }
-            return collectedUrls;
+            State.crawlerAbortController = null;
+            UIEngine.showToast(`Crawl Complete. Indexed ${count} pages.`);
+            if (State.dashboardElement) UIEngine.refreshData();
         }
     };
 
     // ==================================================================
-    // STRUCTURAL UTILITIES SCHEMA GENERATORS
+    // USER INTERFACE & DASHBOARD ENGINE
     // ==================================================================
-    const SchemaGenerator = {
-        compileJsonLd(recordsArray) {
-            const contextStructure = {
-                "@context": "https://schema.org",
-                "@type": "BookmarkCollection",
-                "name": "Smart Bookmark Intelligence Index Dashboard",
-                "description": "Auto-generated runtime compiled semantic optimization bookmarks list",
-                "mainEntity": {
-                    "@type": "ItemList",
-                    "itemListElement": recordsArray.map((rec, index) => ({
-                        "@type": "ListItem",
-                        "position": index + 1,
-                        "item": {
-                            "@type": "WebPage",
-                            "name": rec.title,
-                            "description": rec.description,
-                            "url": rec.url,
-                            "image": rec.icon,
-                            "dateCreated": new Date(rec.dateAdded).toISOString(),
-                            "keywords": rec.tags.join(',')
-                        }
-                    }))
-                }
-            };
-            return JSON.stringify(contextStructure, null, 2);
-        }
-    };
-
-    // ==================================================================
-    // PANEL DISPLAY COORDINATOR VIEW STATES UI
-    // ==================================================================
-    const PanelCoordinator = {
-        requestVisibilityHandshake(targetPanelElement) {
-            // Auto close sibling audit frames dynamically to maintain a single visibility thread context
-            const runtimeAuditorPanel = document.getElementById('anh-seo-auditor-panel');
-            if (runtimeAuditorPanel) runtimeAuditorPanel.remove();
-
-            if (activePanelElement && activePanelElement !== targetPanelElement) {
-                activePanelElement.remove();
-            }
-            activePanelElement = targetPanelElement;
-        },
-        releaseHandshake() {
-            activePanelElement = null;
-        }
-    };
-
-    // ==================================================================
-    // MODERN USER INTERFACE DASHBOARD RENDERING PIPELINE
-    // ==================================================================
-    const DashboardUserInterface = {
-        rootNode: null,
-        datasetCache: [],
-        filterCriteria: 'ALL',
-        searchQueryStr: '',
-        sortCriteria: 'LATEST',
-
-        injectStyles() {
-            if (document.getElementById('anh-bookmark-styles')) return;
+    const UIEngine = {
+        injectCSS() {
+            if (document.getElementById('anh-bm-styles')) return;
             const style = document.createElement('style');
-            style.id = 'anh-bookmark-styles';
+            style.id = 'anh-bm-styles';
             style.textContent = `
-                .anh-b-frame {
-                    position: fixed; top: 10%; left: 15%; width: 70vw; height: 75vh;
-                    background: #0b0f19; color: #f1f5f9; border-radius: 16px;
-                    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); z-index: 100005;
-                    font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column;
-                    border: 1px solid #1e293b; overflow: hidden; min-width: 360px; min-height: 300px;
+                :root {
+                    --anh-bg: #0f172a; --anh-panel: #1e293b; --anh-border: #334155;
+                    --anh-text: #f8fafc; --anh-text-muted: #94a3b8; --anh-primary: #3b82f6;
+                    --anh-danger: #ef4444; --anh-success: #10b981; --anh-tier: #06b6d4;
                 }
-                .anh-b-header {
-                    padding: 16px 20px; background: #111827; border-bottom: 1px solid #1e293b;
-                    display: flex; justify-content: space-between; align-items: center; cursor: move;
+                [data-anh-theme="light"] {
+                    --anh-bg: #f8fafc; --anh-panel: #ffffff; --anh-border: #e2e8f0;
+                    --anh-text: #0f172a; --anh-text-muted: #64748b;
                 }
-                .anh-b-searchbar {
-                    background: #1f2937; border: 1px solid #374151; padding: 8px 12px;
-                    border-radius: 8px; color: white; width: 220px; font-size: 13px;
+                #${CONFIG.PANEL_ID} {
+                    position: fixed; top: 10vh; left: 15vw; width: 70vw; height: 80vh;
+                    background: var(--anh-bg); color: var(--anh-text); border: 1px solid var(--anh-border);
+                    border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+                    z-index: ${CONFIG.UI_Z_INDEX}; display: flex; flex-direction: column;
+                    font-family: system-ui, -apple-system, sans-serif; overflow: hidden;
+                    transition: width 0.3s, height 0.3s, top 0.3s, left 0.3s;
                 }
-                .anh-b-main { display: flex; flex: 1; overflow: hidden; }
-                .anh-b-sidebar {
-                    width: 200px; background: #111827; border-right: 1px solid #1e293b;
-                    padding: 16px; display: flex; flex-direction: column; gap: 8px;
+                .anh-bm-header {
+                    padding: 16px; background: var(--anh-panel); border-bottom: 1px solid var(--anh-border);
+                    display: flex; justify-content: space-between; align-items: center; cursor: move; user-select: none;
                 }
-                .anh-b-grid-view {
-                    flex: 1; overflow-y: auto; padding: 20px; display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; content-visibility: auto;
+                .anh-bm-body { display: flex; flex: 1; overflow: hidden; }
+                .anh-bm-sidebar {
+                    width: 240px; background: var(--anh-panel); border-right: 1px solid var(--anh-border);
+                    padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
                 }
-                .anh-b-card {
-                    background: #1f2937; border-radius: 12px; border: 1px solid #374151;
-                    padding: 16px; display: flex; flex-direction: column; gap: 10px;
-                    transition: transform 0.2s, border-color 0.2s; position: relative;
+                .anh-bm-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+                .anh-bm-toolbar { padding: 12px 20px; border-bottom: 1px solid var(--anh-border); display: flex; gap: 12px; }
+                .anh-bm-grid {
+                    flex: 1; padding: 20px; overflow-y: auto; display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; align-content: start;
                 }
-                .anh-b-card:hover { transform: translateY(-2px); border-color: #3b82f6; }
-                .anh-b-badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-                .anh-b-badge-tier { background: #06b6d4; color: white; }
-                .anh-b-badge-seo { background: #10b981; color: white; }
-                .anh-b-btn {
-                    padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
-                    border: none; background: #374151; color: white; transition: background 0.2s;
+                .anh-bm-card {
+                    background: var(--anh-panel); border: 1px solid var(--anh-border); border-radius: 8px;
+                    padding: 16px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s;
                 }
-                .anh-b-btn:hover { background: #4b5563; }
-                .anh-b-btn-primary { background: #2563eb; }
-                .anh-b-btn-primary:hover { background: #1d4ed8; }
-                .anh-b-nav-item {
-                    padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
-                    transition: background 0.2s; display: flex; justify-content: space-between;
+                .anh-bm-card:hover { transform: translateY(-2px); border-color: var(--anh-primary); }
+                .anh-bm-input, .anh-bm-select {
+                    background: var(--anh-bg); color: var(--anh-text); border: 1px solid var(--anh-border);
+                    padding: 8px 12px; border-radius: 6px; font-size: 13px; width: 100%; box-sizing: border-box;
                 }
-                .anh-b-nav-item:hover, .anh-b-nav-item.active { background: #1f2937; color: #3b82f6; }
-                .anh-b-footer-actions {
-                    padding: 12px 20px; background: #111827; border-top: 1px solid #1e293b;
-                    display: flex; justify-content: space-between; align-items: center; font-size: 12px;
+                .anh-bm-btn {
+                    background: var(--anh-border); color: var(--anh-text); border: none;
+                    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: filter 0.2s;
+                }
+                .anh-bm-btn:hover { filter: brightness(1.2); }
+                .anh-bm-btn.primary { background: var(--anh-primary); color: white; }
+                .anh-bm-btn.danger { background: var(--anh-danger); color: white; }
+                .anh-bm-badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+                .anh-bm-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+                .anh-bm-tag { background: var(--anh-bg); padding: 2px 8px; border-radius: 12px; font-size: 10px; border: 1px solid var(--anh-border); }
+                .anh-bm-filter-btn { text-align: left; background: transparent; border: none; color: var(--anh-text-muted); padding: 8px; cursor: pointer; border-radius: 4px; }
+                .anh-bm-filter-btn:hover, .anh-bm-filter-btn.active { background: var(--anh-bg); color: var(--anh-primary); }
+                #anh-bm-toast {
+                    position: fixed; bottom: 20px; right: 20px; background: var(--anh-primary); color: white;
+                    padding: 12px 24px; border-radius: 8px; z-index: ${CONFIG.UI_Z_INDEX + 1}; font-size: 14px;
+                    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.3s; pointer-events: none;
                 }
             `;
             document.head.appendChild(style);
         },
+        async open() {
+            if (State.dashboardElement) return;
+            
+            // Auto Panel Coordination
+            const seoPanel = document.getElementById('anh-seo-auditor-panel') || document.querySelector('[id*="seo-panel"]');
+            if (seoPanel) seoPanel.remove();
 
-        open() {
-            if (document.getElementById('anh-bookmark-dashboard')) return;
-            this.injectStyles();
+            this.injectCSS();
+            await DB.init();
 
-            this.rootNode = document.createElement('div');
-            this.rootNode.id = 'anh-bookmark-dashboard';
-            this.rootNode.className = 'anh-b-frame';
-
-            PanelCoordinator.requestVisibilityHandshake(this.rootNode);
-            document.body.appendChild(this.rootNode);
-
-            this.bindWindowControls();
-            this.syncRenderLifecycle();
+            State.dashboardElement = document.createElement('div');
+            State.dashboardElement.id = CONFIG.PANEL_ID;
+            State.dashboardElement.setAttribute('data-anh-theme', State.isDark ? 'dark' : 'light');
+            
+            this.renderSkeleton();
+            document.body.appendChild(State.dashboardElement);
+            
+            this.bindEvents();
+            await this.refreshData();
         },
-
         close() {
-            if (this.rootNode) {
-                this.rootNode.remove();
-                this.rootNode = null;
-                PanelCoordinator.releaseHandshake();
+            if (State.dashboardElement) {
+                State.dashboardElement.remove();
+                State.dashboardElement = null;
             }
         },
-
-        async syncRenderLifecycle() {
-            this.datasetCache = await DbFactory.executeTransaction(STORES.bookmarks, 'readonly', (store) => store.getAll());
-            this.renderComponentLayout();
-        },
-
-        renderComponentLayout() {
-            if (!this.rootNode) return;
-
-            const filteredData = this.applyFiltersAndSearch();
-
-            this.rootNode.innerHTML = `
-                <div class="anh-b-header" id="anh-b-drag-target">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <span style="font-weight:bold; letter-spacing:0.5px;">Smart Bookmark Intelligence Dashboard</span>
-                        <span class="anh-b-badge" style="background:#2563eb;">Count: ${filteredData.length}</span>
+        renderSkeleton() {
+            State.dashboardElement.innerHTML = `
+                <div class="anh-bm-header" id="anh-bm-drag-handle">
+                    <div style="font-weight: bold; display: flex; align-items: center; gap: 8px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+                        ANH Bookmark Intelligence
                     </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <input type="text" class="anh-b-searchbar" id="anh-b-search" placeholder="Search parameters..." value="${this.searchQueryStr}">
-                        <button class="anh-b-btn" id="anh-b-btn-fs" style="padding:4px 8px;">Fullscreen</button>
-                        <button class="anh-b-btn" id="anh-b-btn-close" style="background:#ef4444; padding:4px 8px;">&times;</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="anh-bm-btn" id="anh-bm-theme-toggle">🌗</button>
+                        <button class="anh-bm-btn" id="anh-bm-fullscreen">⛶</button>
+                        <button class="anh-bm-btn danger" id="anh-bm-close">✕</button>
                     </div>
                 </div>
-
-                <div class="anh-b-main">
-                    <div class="anh-b-sidebar">
-                        <div style="font-size:11px; font-weight:bold; color:#4b5563; text-transform:uppercase; margin-bottom:4px;">Filter Context</div>
-                        <div class="anh-b-nav-item ${this.filterCriteria === 'ALL' ? 'active' : ''}" data-filter="ALL">All Indexed Bookmarks</div>
-                        <div class="anh-b-nav-item ${this.filterCriteria === 'EXCELLENT_SEO' ? 'active' : ''}" data-filter="EXCELLENT_SEO">Excellent SEO (80+)</div>
-                        <div class="anh-b-nav-item ${this.filterCriteria === 'TIER_1' ? 'active' : ''}" data-filter="TIER_1">Tier-1 Trust Registers</div>
-                        <div class="anh-b-nav-item ${this.filterCriteria === 'RECENT' ? 'active' : ''}" data-filter="RECENT">Recently Added Links</div>
-
-                        <div style="font-size:11px; font-weight:bold; color:#4b5563; text-transform:uppercase; margin-top:16px; margin-bottom:4px;">Sort Layout</div>
-                        <select id="anh-b-sort" style="background:#1f2937; border:1px solid #374151; color:white; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">
-                            <option value="LATEST" ${this.sortCriteria === 'LATEST' ? 'selected' : ''}>Latest Index Order</option>
-                            <option value="SEO_HIGH" ${this.sortCriteria === 'SEO_HIGH' ? 'selected' : ''}>Highest SEO Rank</option>
-                            <option value="TITLE_A" ${this.sortCriteria === 'TITLE_A' ? 'selected' : ''}>Alphabetical Title</option>
-                        </select>
+                <div class="anh-bm-body">
+                    <div class="anh-bm-sidebar">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--anh-text-muted); font-weight: bold;">Filters</div>
+                        <button class="anh-bm-filter-btn active" data-filter="ALL">All Bookmarks</button>
+                        <button class="anh-bm-filter-btn" data-filter="TIER_1">Tier-1 Validated</button>
+                        <button class="anh-bm-filter-btn" data-filter="EXCELLENT_SEO">Excellent SEO (80+)</button>
+                        <button class="anh-bm-filter-btn" data-filter="RECENT">Recently Added</button>
+                        <hr style="border:0; border-top: 1px solid var(--anh-border); width: 100%;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--anh-text-muted); font-weight: bold;">Export</div>
+                        <button class="anh-bm-btn" id="anh-bm-exp-json">Export JSON-LD</button>
+                        <button class="anh-bm-btn" id="anh-bm-exp-csv">Export CSV</button>
+                        <button class="anh-bm-btn danger" id="anh-bm-clear-all" style="margin-top: auto;">Wipe Database</button>
                     </div>
-
-                    <div class="anh-b-grid-view" id="anh-b-grid">
-                        ${this.generateCardTemplateRows(filteredData)}
-                    </div>
-                </div>
-
-                <div class="anh-b-footer-actions">
-                    <div style="color:#64748b;">Ecosystem Scope: Akshat Network Hub Protocol Suite</div>
-                    <div style="display:flex; gap:8px;">
-                        <button class="anh-b-btn" id="anh-b-exp-json">Export JSON Schema</button>
-                        <button class="anh-b-btn" id="anh-b-exp-csv">Export CSV Matrix</button>
-                        <button class="anh-b-btn" id="anh-b-exp-html">Export HTML Bookmarks</button>
+                    <div class="anh-bm-main">
+                        <div class="anh-bm-toolbar">
+                            <input type="text" class="anh-bm-input" id="anh-bm-search" placeholder="Search by title, url, tags..." style="flex:1;">
+                            <select class="anh-bm-select" id="anh-bm-sort" style="width: 150px;">
+                                <option value="DATE_DESC">Newest First</option>
+                                <option value="DATE_ASC">Oldest First</option>
+                                <option value="SEO_DESC">Highest SEO</option>
+                                <option value="TITLE_ASC">A-Z</option>
+                            </select>
+                        </div>
+                        <div class="anh-bm-grid" id="anh-bm-grid"></div>
                     </div>
                 </div>
             `;
-
-            this.reassembleInteractions();
         },
-
-        generateCardTemplateRows(records) {
-            if (records.length === 0) {
-                return `<div style="grid-column: 1/-1; text-align:center; padding:40px; color:#4b5563;">No semantic indexing matches found.</div>`;
-            }
-
-            return records.map(rec => {
-                const cleanDesc = rec.description ? (rec.description.substring(0, 85) + '...') : 'No analytical tracking description found.';
-                const seoDisplay = rec.seoScore !== null ? `${rec.seoScore}/100` : 'Unrated';
-                
-                return `
-                    <div class="anh-b-card">
-                        <div style="display:flex; gap:10px; align-items:flex-start;">
-                            <img src="${rec.icon}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%233b82f6%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/></svg>'" style="width:28px; height:28px; border-radius:6px; background:#111827;">
-                            <div style="flex:1; min-width:0;">
-                                <div style="font-weight:600; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#f8fafc;" title="${rec.title}">${rec.title}</div>
-                                <a href="${rec.url}" target="_blank" style="font-size:11px; color:#3b82f6; text-decoration:none; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;">${rec.url}</a>
-                            </div>
-                        </div>
-                        
-                        <div style="font-size:12px; color:#94a3b8; line-height:1.4; flex:1;">${cleanDesc}</div>
-
-                        <div style="display:flex; flex-wrap:wrap; gap:4px;">
-                            ${rec.tags.slice(0, 3).map(t => `<span style="font-size:10px; background:#111827; padding:2px 6px; border-radius:4px; color:#94a3b8;">${t}</span>`).join('')}
-                        </div>
-
-                        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #374151; padding-top:10px; margin-top:4px; font-size:11px;">
-                            <span class="anh-b-badge anh-b-badge-tier">${rec.tier}</span>
-                            <span class="anh-b-badge" style="background:#1e293b; color:#64748b;">Depth: ${rec.crawlDepth}</span>
-                            <span class="anh-b-badge anh-b-badge-seo" style="background:${rec.seoScore >= 80 ? '#10b981' : '#f59e0b'}">SEO: ${seoDisplay}</span>
-                        </div>
-
-                        <div style="display:flex; gap:4px; margin-top:6px; justify-content:flex-end;">
-                            <button class="anh-b-btn anh-b-card-copy" data-url="${rec.url}" style="padding:3px 6px; font-size:10px;">Copy Link</button>
-                            <button class="anh-b-btn anh-b-card-del" data-url="${rec.url}" style="padding:3px 6px; font-size:10px; background:#7f1d1d;">Wipe</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+        async refreshData() {
+            State.bookmarksCache = await DB.getAllBookmarks();
+            this.renderGrid();
         },
+        renderGrid() {
+            const grid = document.getElementById('anh-bm-grid');
+            if (!grid) return;
 
-        applyFiltersAndSearch() {
-            let processed = [...this.datasetCache];
+            let data = [...State.bookmarksCache];
 
-            // Apply filter context scopes rules
-            if (this.filterCriteria === 'EXCELLENT_SEO') {
-                processed = processed.filter(item => item.seoScore >= 80);
-            } else if (this.filterCriteria === 'TIER_1') {
-                processed = processed.filter(item => item.tier === 'TIER-1');
-            } else if (this.filterCriteria === 'RECENT') {
-                processed = processed.filter(item => (Date.now() - item.dateAdded) < 24 * 60 * 60 * 1000);
-            }
-
-            // Apply analytical textual tracking search queries matrix matches
-            if (this.searchQueryStr.trim() !== '') {
-                const matchStr = this.searchQueryStr.toLowerCase();
-                processed = processed.filter(item => 
-                    item.title.toLowerCase().includes(matchStr) ||
-                    item.url.toLowerCase().includes(matchStr) ||
-                    (item.description && item.description.toLowerCase().includes(matchStr)) ||
-                    item.tags.some(t => t.toLowerCase().includes(matchStr))
+            // Apply Search
+            if (State.searchQuery) {
+                const q = State.searchQuery.toLowerCase();
+                data = data.filter(item => 
+                    item.title.toLowerCase().includes(q) || 
+                    item.url.toLowerCase().includes(q) || 
+                    item.tags.some(t => t.toLowerCase().includes(q))
                 );
             }
 
-            // Apply dynamic sort configurations mapping execution matrices
-            if (this.sortCriteria === 'SEO_HIGH') {
-                processed.sort((a, b) => (b.seoScore || 0) - (a.seoScore || 0));
-            } else if (this.sortCriteria === 'TITLE_A') {
-                processed.sort((a, b) => a.title.localeCompare(b.title));
-            } else {
-                processed.sort((a, b) => b.dateAdded - a.dateAdded);
+            // Apply Filters
+            if (State.activeFilter === 'TIER_1') data = data.filter(i => i.tier === 'TIER-1');
+            if (State.activeFilter === 'EXCELLENT_SEO') data = data.filter(i => i.seoScore >= 80);
+            if (State.activeFilter === 'RECENT') data = data.filter(i => (Date.now() - i.dateAdded) < 86400000);
+
+            // Apply Sort
+            data.sort((a, b) => {
+                if (State.activeSort === 'DATE_DESC') return b.dateAdded - a.dateAdded;
+                if (State.activeSort === 'DATE_ASC') return a.dateAdded - b.dateAdded;
+                if (State.activeSort === 'SEO_DESC') return (b.seoScore || 0) - (a.seoScore || 0);
+                if (State.activeSort === 'TITLE_ASC') return a.title.localeCompare(b.title);
+                return 0;
+            });
+
+            // Virtualization Strategy: Chunked rendering via DocumentFragment to prevent main thread lock
+            grid.innerHTML = '';
+            if (data.length === 0) {
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--anh-text-muted); padding: 40px;">No bookmarks found.</div>`;
+                return;
             }
 
-            return processed;
-        },
+            const fragment = document.createDocumentFragment();
+            // Implement a safe limit for initial render to ensure performance (Virtualization subset)
+            const renderLimit = Math.min(data.length, 100); 
 
-        reassembleInteractions() {
-            // Debounced query logic mapping implementation constraints hooks handles
-            const searchField = document.getElementById('anh-b-search');
-            let debounceTimer;
-            searchField.oninput = () => {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                    this.searchQueryStr = searchField.value;
-                    this.renderComponentLayout();
-                }, 300);
-            };
-
-            // Sorting bindings setup parameters mapping components logic
-            document.getElementById('anh-b-sort').onchange = (e) => {
-                this.sortCriteria = e.target.value;
-                this.renderComponentLayout();
-            };
-
-            // Sidebar selections actions execution blocks pipelines elements
-            this.rootNode.querySelectorAll('.anh-b-sidebar .anh-b-nav-item').forEach(item => {
-                item.onclick = () => {
-                    this.filterCriteria = item.getAttribute('data-filter');
-                    this.renderComponentLayout();
-                };
-            });
-
-            // Component core window action interfaces mapping buttons references handlers
-            document.getElementById('anh-b-btn-close').onclick = () => this.close();
-            
-            const fullscreenBtn = document.getElementById('anh-b-btn-fs');
-            fullscreenBtn.onclick = () => {
-                if (this.rootNode.style.width === '100vw') {
-                    this.rootNode.style.width = '70vw';
-                    this.rootNode.style.height = '75vh';
-                    this.rootNode.style.top = '10%';
-                    this.rootNode.style.left = '15%';
-                    fullscreenBtn.textContent = 'Fullscreen';
-                } else {
-                    this.rootNode.style.width = '100vw';
-                    this.rootNode.style.height = '100vh';
-                    this.rootNode.style.top = '0';
-                    this.rootNode.style.left = '0';
-                    fullscreenBtn.textContent = 'Restore';
-                }
-            };
-
-            // Card entity items operation mappings allocations
-            this.rootNode.querySelectorAll('.anh-b-card-copy').forEach(btn => {
-                btn.onclick = () => {
-                    navigator.clipboard.writeText(btn.getAttribute('data-url'));
-                    btn.textContent = 'Copied!';
-                    setTimeout(() => btn.textContent = 'Copy Link', 1500);
-                };
-            });
-
-            this.rootNode.querySelectorAll('.anh-b-card-del').forEach(btn => {
-                btn.onclick = async () => {
-                    const targetUrl = btn.getAttribute('data-url');
-                    await DbFactory.executeTransaction(STORES.bookmarks, 'readwrite', (store) => store.delete(targetUrl));
-                    await this.syncRenderLifecycle();
-                };
-            });
-
-            // Master data packaging serialization trigger points allocations mappings loops
-            document.getElementById('anh-b-exp-json').onclick = () => {
-                const schemaString = SchemaGenerator.compileJsonLd(this.applyFiltersAndSearch());
-                this.triggerNativeFileDownload(schemaString, 'anh-bookmarks-schema.json', 'application/json');
-            };
-
-            document.getElementById('anh-b-exp-csv').onclick = () => {
-                const data = this.applyFiltersAndSearch();
-                const csvHeaders = 'Title,URL,SEO Score,Trust Tier,Date Added\n';
-                const csvRows = data.map(r => `"${r.title.replace(/"/g, '""')}","${r.url}",${r.seoScore || 0},"${r.tier}",${new Date(r.dateAdded).toLocaleDateString()}`).join('\n');
-                this.triggerNativeFileDownload(csvHeaders + csvRows, 'anh-bookmarks-matrix.csv', 'text/csv');
-            };
-
-            document.getElementById('anh-b-exp-html').onclick = () => {
-                const data = this.applyFiltersAndSearch();
-                const htmlTemplateStr = `<!DOCTYPE html><html><head><title>ANH Exported Bookmarks</title></head><body><h1>Bookmarks</h1><ul>` + 
-                    data.map(r => `<li><a href="${r.url}">${r.title}</a> (SEO: ${r.seoScore || 'Unrated'})</li>`).join('') + `</ul></body></html>`;
-                this.triggerNativeFileDownload(htmlTemplateStr, 'anh-bookmarks.html', 'text/html');
-            };
-        },
-
-        triggerNativeFileDownload(content, fileName, mimeType) {
-            const blob = new Blob([content], { type: mimeType });
-            const downloadUrl = URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
-            anchor.href = downloadUrl;
-            anchor.download = fileName;
-            anchor.click();
-            URL.revokeObjectURL(downloadUrl);
-        },
-
-        bindWindowControls() {
-            const dragTarget = document.getElementById('anh-b-drag-target');
-            let isDragging = false;
-            let startX, startY, initialLeft, initialTop;
-
-            dragTarget.onmousedown = (e) => {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
-                isDragging = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                initialLeft = this.rootNode.offsetLeft;
-                initialTop = this.rootNode.offsetTop;
-
-                document.onmousemove = (moveEvent) => {
-                    if (!isDragging) return;
-                    const dx = moveEvent.clientX - startX;
-                    const dy = moveEvent.clientY - startY;
-                    this.rootNode.style.left = `${initialLeft + dx}px`;
-                    this.rootNode.style.top = `${initialTop + dy}px`;
-                };
-
-                document.onmouseup = () => {
-                    isDragging = false;
-                    document.onmousemove = null;
-                    document.onmouseup = null;
-                };
-            };
-        }
-    };
-
-    // ==================================================================
-    // GLOBAL KEYBOARD KEY SHORTCUT LISTENERS SEQUENCING INTERCEPTORS
-    // ==================================================================
-    const ShortcutCoordinatorEngine = {
-        init() {
-            window.addEventListener('keydown', (e) => {
-                pressedKeys.add(e.key.toUpperCase());
+            for (let i = 0; i < renderLimit; i++) {
+                const item = data[i];
+                const card = document.createElement('div');
+                card.className = 'anh-bm-card';
                 
-                // Track key sequence maps accurately inside volatile state registers
-                const hasShift = e.shiftKey;
-                const hasCtrl = e.ctrlKey;
+                const seoColor = item.seoScore >= 80 ? 'var(--anh-success)' : (item.seoScore >= 50 ? '#f59e0b' : 'var(--anh-danger)');
+                const desc = item.description ? (item.description.length > 80 ? item.description.substring(0, 80) + '...' : item.description) : 'No description.';
 
-                // Close Dashboard View state execution maps boundary rules triggers
-                if (e.key === 'Escape') {
-                    DashboardUserInterface.close();
-                }
+                card.innerHTML = `
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
+                        <img src="${Utils.escapeHTML(item.icon)}" style="width: 32px; height: 32px; border-radius: 6px; background: var(--anh-bg); object-fit: cover;" onerror="this.style.display='none'">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${Utils.escapeHTML(item.title)}">${Utils.escapeHTML(item.title)}</div>
+                            <a href="${Utils.escapeHTML(item.url)}" target="_blank" style="font-size: 11px; color: var(--anh-primary); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${Utils.escapeHTML(item.url)}</a>
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: var(--anh-text-muted); flex: 1;">${Utils.escapeHTML(desc)}</div>
+                    <div class="anh-bm-tags">
+                        ${item.tags.slice(0,4).map(t => `<span class="anh-bm-tag">${Utils.escapeHTML(t)}</span>`).join('')}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--anh-border); padding-top: 8px; margin-top: 4px;">
+                        <div style="display: flex; gap: 6px;">
+                            <span class="anh-bm-badge" style="background: var(--anh-tier); color: white;">${Utils.escapeHTML(item.tier)}</span>
+                            <span class="anh-bm-badge" style="background: ${seoColor}; color: white;">SEO: ${item.seoScore ?? 'N/A'}</span>
+                        </div>
+                        <div style="display: flex; gap: 4px;">
+                            <button class="anh-bm-btn" onclick="window.ANH_BOOKMARK.delete('${Utils.escapeHTML(item.url)}')" style="padding: 4px 8px; font-size: 10px; background: var(--anh-danger); color: white;">Wipe</button>
+                        </div>
+                    </div>
+                `;
+                fragment.appendChild(card);
+            }
+            grid.appendChild(fragment);
+        },
+        bindEvents() {
+            // Drag Logic
+            const header = document.getElementById('anh-bm-drag-handle');
+            let isDragging = false, startX, startY, startLeft, startTop;
+            
+            header.addEventListener('mousedown', (e) => {
+                if(e.target.tagName === 'BUTTON') return;
+                isDragging = true;
+                startX = e.clientX; startY = e.clientY;
+                startLeft = State.dashboardElement.offsetLeft;
+                startTop = State.dashboardElement.offsetTop;
+                State.dashboardElement.style.transition = 'none';
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                State.dashboardElement.style.left = `${startLeft + (e.clientX - startX)}px`;
+                State.dashboardElement.style.top = `${startTop + (e.clientY - startY)}px`;
+            });
+            document.addEventListener('mouseup', () => { 
+                isDragging = false; 
+                if(State.dashboardElement) State.dashboardElement.style.transition = 'width 0.3s, height 0.3s, top 0.3s, left 0.3s';
+            });
 
-                // CTRL + S + B combo check context mapping
-                if (hasCtrl && pressedKeys.has('S') && pressedKeys.has('B')) {
-                    e.preventDefault();
-                    DashboardUserInterface.open();
-                }
-
-                // Advanced multi depth mapping matrix trigger matching rules: SHIFT + B + A
-                if (hasShift && pressedKeys.has('B') && pressedKeys.has('A')) {
-                    e.preventDefault();
-                    this.fireVisualNotificationSpinner("Executing Advanced Deep Crawl Sequence Pipeline (Depth 2 Limit Rules)...");
-                    DeepCrawlerEngine.executeMultiDepthSearch(Helper.normalizeUrl(window.location.href), (count, currentUrl) => {
-                        this.updateFloatingToast(`Crawled & Indexed Node Structure: ${count} targets active...`);
-                    }).then(() => {
-                        this.fireVisualNotificationSpinner("Deep Crawl Multi Pipelining Completed Successfully.");
-                    });
-                    this.flushRegisters();
-                    return;
-                }
-
-                // Baseline shortcut action map triggers: SHIFT + B
-                if (hasShift && e.key.toUpperCase() === 'B' && !pressedKeys.has('A')) {
-                    e.preventDefault();
-                    const dataset = MetadataEngine.extractFromDOM(document, Helper.normalizeUrl(window.location.href));
-                    DbFactory.executeTransaction(STORES.bookmarks, 'readwrite', (store) => store.put(dataset)).then(() => {
-                        this.fireVisualNotificationSpinner("Page Metadata Indexed Successfully inside Smart Local Memory Core.");
-                    });
+            // Window Controls
+            document.getElementById('anh-bm-close').addEventListener('click', () => this.close());
+            document.getElementById('anh-bm-theme-toggle').addEventListener('click', () => {
+                State.isDark = !State.isDark;
+                State.dashboardElement.setAttribute('data-anh-theme', State.isDark ? 'dark' : 'light');
+            });
+            document.getElementById('anh-bm-fullscreen').addEventListener('click', () => {
+                const el = State.dashboardElement;
+                if (el.style.width === '100vw') {
+                    el.style.width = '70vw'; el.style.height = '80vh';
+                    el.style.top = '10vh'; el.style.left = '15vw';
+                } else {
+                    el.style.width = '100vw'; el.style.height = '100vh';
+                    el.style.top = '0'; el.style.left = '0';
                 }
             });
 
-            window.addEventListener('keyup', (e) => {
-                pressedKeys.delete(e.key.toUpperCase());
+            // Search & Sort
+            document.getElementById('anh-bm-search').addEventListener('input', Utils.debounce((e) => {
+                State.searchQuery = e.target.value;
+                this.renderGrid();
+            }, 300));
+            document.getElementById('anh-bm-sort').addEventListener('change', (e) => {
+                State.activeSort = e.target.value;
+                this.renderGrid();
             });
 
-            // Window boundary safety override layer logic maps definitions reset
-            window.addEventListener('blur', () => pressedKeys.clear());
-        },
+            // Sidebar Filters
+            document.querySelectorAll('.anh-bm-filter-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.anh-bm-filter-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    State.activeFilter = e.target.getAttribute('data-filter');
+                    this.renderGrid();
+                });
+            });
 
-        flushRegisters() {
-            pressedKeys.clear();
+            // Export & Wipe
+            document.getElementById('anh-bm-clear-all').addEventListener('click', async () => {
+                if(confirm("Wipe all intelligence data?")) {
+                    await DB.clearAll();
+                    await this.refreshData();
+                }
+            });
+            document.getElementById('anh-bm-exp-json').addEventListener('click', () => this.exportData('json'));
+            document.getElementById('anh-bm-exp-csv').addEventListener('click', () => this.exportData('csv'));
         },
-
-        fireVisualNotificationSpinner(msg) {
-            this.updateFloatingToast(msg);
+        exportData(format) {
+            let content, type, filename;
+            if (format === 'json') {
+                const schemas = State.bookmarksCache.map(b => IntelligenceEngine.generateJSONLD(b));
+                content = JSON.stringify({ "@context": "https://schema.org", "@type": "BookmarkCollection", "itemListElement": schemas }, null, 2);
+                type = 'application/ld+json';
+                filename = 'anh_intelligence_export.jsonld';
+            } else if (format === 'csv') {
+                content = "Title,URL,SEO_Score,Tier,Date_Added\n" + State.bookmarksCache.map(b => 
+                    `"${(b.title||'').replace(/"/g, '""')}","${b.url}",${b.seoScore||0},${b.tier},${new Date(b.dateAdded).toISOString()}`
+                ).join('\n');
+                type = 'text/csv';
+                filename = 'anh_intelligence_export.csv';
+            }
+            const blob = new Blob([content], { type });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(a.href);
         },
-
-        updateFloatingToast(msg) {
-            let toast = document.getElementById('anh-bookmark-toast');
+        showToast(msg) {
+            let toast = document.getElementById('anh-bm-toast');
             if (!toast) {
                 toast = document.createElement('div');
-                toast.id = 'anh-bookmark-toast';
-                toast.style = `
-                    position: fixed; bottom: 20px; left: 20px; background: #1e293b; color: #38bdf8;
-                    padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 500;
-                    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); z-index: 100010;
-                    border: 1px solid #334155; pointer-events: none; transition: opacity 0.3s;
-                `;
+                toast.id = 'anh-bm-toast';
                 document.body.appendChild(toast);
             }
             toast.textContent = msg;
             toast.style.opacity = '1';
-            
-            clearTimeout(window.anhToastTimer);
-            window.anhToastTimer = setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
+            setTimeout(() => { toast.style.opacity = '0'; }, 3000);
         }
     };
 
     // ==================================================================
-    // GLOBAL BRAND INTERACTION PUBLIC INTERFACE API SPECIFICATION
+    // SHORTCUT COORDINATOR
+    // ==================================================================
+    const ShortcutEngine = {
+        init() {
+            window.addEventListener('keydown', (e) => {
+                State.pressedKeys.add(e.key.toUpperCase());
+                
+                // ESC: Close Dashboard
+                if (e.key === 'Escape') UIEngine.close();
+
+                // CTRL + S + B: Open Dashboard
+                if (e.ctrlKey && State.pressedKeys.has('S') && State.pressedKeys.has('B')) {
+                    e.preventDefault();
+                    UIEngine.open();
+                }
+
+                // SHIFT + B + A: Advanced Depth 2 Crawl
+                if (e.shiftKey && State.pressedKeys.has('B') && State.pressedKeys.has('A')) {
+                    e.preventDefault();
+                    CrawlerEngine.runAdvancedCrawl(window.location.href);
+                    State.pressedKeys.clear(); // Flush
+                    return;
+                }
+
+                // SHIFT + B: Basic Bookmark Current Page
+                if (e.shiftKey && e.key.toUpperCase() === 'B' && !State.pressedKeys.has('A')) {
+                    e.preventDefault();
+                    const record = IntelligenceEngine.extractFromDOM(document, window.location.href, 0);
+                    DB.saveBookmark(record).then(() => {
+                        UIEngine.showToast("Page Indexed in Intelligence DB.");
+                        if (State.dashboardElement) UIEngine.refreshData();
+                    });
+                }
+            });
+
+            window.addEventListener('keyup', (e) => State.pressedKeys.delete(e.key.toUpperCase()));
+            window.addEventListener('blur', () => State.pressedKeys.clear());
+        }
+    };
+
+    // ==================================================================
+    // PUBLIC API & INITIALIZATION
     // ==================================================================
     window.ANH_BOOKMARK = {
         async add(url) {
-            if (!dbInstance) await DbFactory.init();
-            const dataset = await MetadataEngine.crawlTargetNode(Helper.normalizeUrl(url), 0, null);
-            if (dataset) {
-                await DbFactory.executeTransaction(STORES.bookmarks, 'readwrite', (store) => store.put(dataset));
+            const record = await CrawlerEngine.crawlTarget(Utils.normalizeUrl(url), 0, null);
+            if (record) {
+                await DB.saveBookmark(record);
+                if (State.dashboardElement) UIEngine.refreshData();
                 return true;
             }
             return false;
         },
-        addCurrent() {
-            const dataset = MetadataEngine.extractFromDOM(document, Helper.normalizeUrl(window.location.href));
-            return DbFactory.executeTransaction(STORES.bookmarks, 'readwrite', (store) => store.put(dataset));
+        async addCurrent() {
+            const record = IntelligenceEngine.extractFromDOM(document, window.location.href, 0);
+            await DB.saveBookmark(record);
+            if (State.dashboardElement) UIEngine.refreshData();
         },
         addDepth2() {
-            return DeepCrawlerEngine.executeMultiDepthSearch(Helper.normalizeUrl(window.location.href));
+            CrawlerEngine.runAdvancedCrawl(window.location.href);
         },
-        open() {
-            DashboardUserInterface.open();
-        },
-        close() {
-            DashboardUserInterface.close();
-        },
+        open() { UIEngine.open(); },
+        close() { UIEngine.close(); },
+        export() { UIEngine.exportData('json'); },
         async search(query) {
-            const allData = await DbFactory.executeTransaction(STORES.bookmarks, 'readonly', (store) => store.getAll());
-            const m = query.toLowerCase();
-            return allData.filter(item => item.title.toLowerCase().includes(m) || item.url.toLowerCase().includes(m));
+            const data = await DB.getAllBookmarks();
+            const q = query.toLowerCase();
+            return data.filter(i => i.title.toLowerCase().includes(q) || i.url.toLowerCase().includes(q));
+        },
+        async delete(url) {
+            await DB.deleteBookmark(url);
+            UIEngine.showToast("Record wiped.");
+            if (State.dashboardElement) UIEngine.refreshData();
         },
         async clear() {
-            await DbFactory.executeTransaction(STORES.bookmarks, 'readwrite', (store) => store.clear());
-            await DashboardUserInterface.syncRenderLifecycle();
+            await DB.clearAll();
+            if (State.dashboardElement) UIEngine.refreshData();
         }
     };
 
-    // Initialize Telemetry Engines System Lifecycle Hooks Sequences
+    // Bootstrap
     document.addEventListener('DOMContentLoaded', () => {
-        DbFactory.init().then(() => {
-            ShortcutCoordinatorEngine.init();
-        }).catch(err => {
-            console.error("[Smart Bookmark Intelligence Database Boot Exception Boundary Failed]", err);
-        });
+        DB.init().then(() => ShortcutEngine.init()).catch(console.error);
     });
+
 })();
