@@ -45,6 +45,8 @@
       'engagement-ui-tracker.js',
       'behavioral-analytics-tracker.js',
       'seo-runtime-auditor.js',
+      'smart-bookmark-intelligence.js',
+      'anh-inspection-mode.js',
       'redirect_handler.js'
     ],
     ANALYTICS_WEIGHTS: {
