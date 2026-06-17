@@ -2,8 +2,7 @@
  * FILE: anh-inspection-mode.js
  * Trigger: CTRL + C (When no text is selected)
  * Purpose: ANH Developer Tools - Frontend inspection & site exploration for ANH Visitors
- * 
- * FEATURES:
+ * * FEATURES:
  * ✓ Responsive Design (Mobile, Tablet, Desktop)
  * ✓ DOM Inspector with Element Picker
  * ✓ Style Inspector (Computed & Inline Styles)
@@ -116,54 +115,67 @@
     }
 
     // ============= CONSOLE INTERCEPTION =============
+    // FIX 1: Infinite Recursion Browser Crash Prevented via requestAnimationFrame
     function interceptConsole() {
         const originalLog = console.log;
         const originalError = console.error;
         const originalWarn = console.warn;
         const originalInfo = console.info;
 
+        let updateScheduled = false;
+
+        const scheduleUpdate = () => {
+            if (STATE.isDevToolsOpen && !updateScheduled) {
+                updateScheduled = true;
+                requestAnimationFrame(() => {
+                    updateConsolePanel();
+                    updateScheduled = false;
+                });
+            }
+        };
+
         console.log = function(...args) {
+            originalLog.apply(console, args);
             STATE.consoleMessages.push({
                 type: 'log',
                 message: args.map(formatConsoleArg).join(' '),
                 timestamp: new Date(),
                 raw: args
             });
-            updateConsolePanel();
-            originalLog.apply(console, args);
+            scheduleUpdate();
         };
 
         console.error = function(...args) {
+            originalError.apply(console, args);
             STATE.consoleMessages.push({
                 type: 'error',
                 message: args.map(formatConsoleArg).join(' '),
                 timestamp: new Date(),
                 raw: args
             });
-            updateConsolePanel();
-            originalError.apply(console, args);
+            scheduleUpdate();
         };
 
         console.warn = function(...args) {
+            originalWarn.apply(console, args);
             STATE.consoleMessages.push({
                 type: 'warn',
                 message: args.map(formatConsoleArg).join(' '),
                 timestamp: new Date(),
                 raw: args
             });
-            updateConsolePanel();
-            originalWarn.apply(console, args);
+            scheduleUpdate();
         };
 
         console.info = function(...args) {
+            originalInfo.apply(console, args);
             STATE.consoleMessages.push({
                 type: 'info',
                 message: args.map(formatConsoleArg).join(' '),
                 timestamp: new Date(),
                 raw: args
             });
-            updateConsolePanel();
-            originalInfo.apply(console, args);
+            scheduleUpdate();
         };
     }
 
@@ -175,6 +187,9 @@
     }
 
     // ============= NETWORK INTERCEPTION =============
+    // FIX 5: Layout Thrashing Debounced via setTimeout
+    let networkUpdateTimeout = null;
+    
     function interceptNetworkRequests() {
         const originalFetch = window.fetch;
         window.fetch = function(...args) {
@@ -191,6 +206,13 @@
                 size: null
             });
 
+            const scheduleNetworkUpdate = () => {
+                if (STATE.isDevToolsOpen) {
+                    clearTimeout(networkUpdateTimeout);
+                    networkUpdateTimeout = setTimeout(updateNetworkPanel, 100);
+                }
+            };
+
             return originalFetch.apply(this, args)
                 .then(response => {
                     const endTime = performance.now();
@@ -199,7 +221,7 @@
                     req.endTime = endTime;
                     req.duration = (endTime - startTime).toFixed(2);
                     req.size = response.headers.get('content-length') || 'unknown';
-                    updateNetworkPanel();
+                    scheduleNetworkUpdate();
                     return response;
                 })
                 .catch(error => {
@@ -208,17 +230,16 @@
                     req.status = 'failed';
                     req.endTime = endTime;
                     req.duration = (endTime - startTime).toFixed(2);
-                    updateNetworkPanel();
+                    scheduleNetworkUpdate();
                     throw error;
                 });
         };
     }
 
     // ============= SOURCE GATHERING =============
+    // FIX 4: Main Thread Lock Removed (No more documentElement.cloneNode(true))
     function gatherSources() {
         STATE.sourceFiles = [];
-        const htmlClone = document.documentElement.cloneNode(true);
-        htmlClone.querySelectorAll('#anh-devtools-container, #anh-devtools-modal').forEach(el => el.remove());
 
         const getAbsoluteUrl = (url) => {
             try {
@@ -228,8 +249,13 @@
             }
         };
 
+        // Query Live DOM explicitly filtering out DevTools UI Elements
+        const filterDevTools = (el) => !el.closest('#anh-devtools-container') && 
+                                       !el.closest('#anh-responsive-preview') && 
+                                       !el.closest('#anh-element-picker-overlay');
+
         // Process Scripts
-        const scripts = Array.from(htmlClone.querySelectorAll('script'));
+        const scripts = Array.from(document.querySelectorAll('script')).filter(filterDevTools);
         let scriptCounter = 1;
         
         for (const script of scripts) {
@@ -258,7 +284,7 @@
         }
 
         // Process Stylesheets
-        const links = Array.from(htmlClone.querySelectorAll('link[rel="stylesheet"]'));
+        const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).filter(filterDevTools);
         let styleCounter = 1;
         
         for (const link of links) {
@@ -278,7 +304,7 @@
         }
 
         // Process Inline Styles
-        const styles = Array.from(htmlClone.querySelectorAll('style'));
+        const styles = Array.from(document.querySelectorAll('style')).filter(filterDevTools);
         for (let i = 0; i < styles.length; i++) {
             if (styles[i].textContent.trim()) {
                 STATE.sourceFiles.push({
@@ -336,72 +362,42 @@
     function checkAccessibility() {
         const issues = [];
 
-        // Check for alt text in images
         document.querySelectorAll('img').forEach(img => {
             if (!img.alt || img.alt.trim() === '') {
-                issues.push({
-                    level: 'error',
-                    element: 'img',
-                    issue: 'Missing alt text',
-                    selector: getSelector(img)
-                });
+                issues.push({ level: 'error', element: 'img', issue: 'Missing alt text', selector: getSelector(img) });
             }
         });
 
-        // Check for form labels
         document.querySelectorAll('input').forEach(input => {
             if (input.type === 'text' || input.type === 'email' || input.type === 'password') {
                 const label = document.querySelector(`label[for="${input.id}"]`);
                 if (!label) {
-                    issues.push({
-                        level: 'warn',
-                        element: 'input',
-                        issue: 'No associated label',
-                        selector: getSelector(input)
-                    });
+                    issues.push({ level: 'warn', element: 'input', issue: 'No associated label', selector: getSelector(input) });
                 }
             }
         });
 
-        // Check for heading hierarchy
         const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'));
         if (headings.length > 0) {
             const firstLevel = parseInt(headings[0].tagName[1]);
             if (firstLevel !== 1) {
-                issues.push({
-                    level: 'warn',
-                    element: 'heading',
-                    issue: 'Page should start with H1',
-                    selector: headings[0].tagName
-                });
+                issues.push({ level: 'warn', element: 'heading', issue: 'Page should start with H1', selector: headings[0].tagName });
             }
         }
 
-        // Check for color contrast (simplified)
         document.querySelectorAll('*').forEach(el => {
             if (el.textContent.trim().length > 0) {
                 const style = window.getComputedStyle(el);
                 if (style.color === 'rgb(0, 0, 0)' && style.backgroundColor === 'rgb(0, 0, 0)') {
-                    issues.push({
-                        level: 'error',
-                        element: el.tagName,
-                        issue: 'Poor color contrast',
-                        selector: getSelector(el)
-                    });
+                    issues.push({ level: 'error', element: el.tagName, issue: 'Poor color contrast', selector: getSelector(el) });
                 }
             }
         });
 
-        // Check for keyboard accessibility
         document.querySelectorAll('button, a, input').forEach(el => {
             if (!el.hasAttribute('tabindex') && el.tabIndex === -1) {
                 if (el.tagName !== 'A' || !el.href) {
-                    issues.push({
-                        level: 'info',
-                        element: el.tagName,
-                        issue: 'Element may not be keyboard accessible',
-                        selector: getSelector(el)
-                    });
+                    issues.push({ level: 'info', element: el.tagName, issue: 'Element may not be keyboard accessible', selector: getSelector(el) });
                 }
             }
         });
@@ -474,7 +470,7 @@
                 pointer-events: none;
                 z-index: 2147483647;
             ">
-                &lt;${element.tagName.toLowerCase()}&gt; ${element.className ? '.' + element.className.split(' ')[0] : ''} ${element.id ? '#' + element.id : ''}
+                &lt;${escapeHTML(element.tagName.toLowerCase())}&gt; ${element.className ? '.' + escapeHTML(element.className.split(' ')[0]) : ''} ${element.id ? '#' + escapeHTML(element.id) : ''}
             </div>
         `;
     }
@@ -485,7 +481,7 @@
 
         STATE.selectedElement = e.target;
         displayElementDetails(STATE.selectedElement);
-        activateElementPicker(); // Deactivate picker
+        activateElementPicker();
     }
 
     function displayElementDetails(element) {
@@ -499,7 +495,6 @@
             html: element.outerHTML.substring(0, 500)
         };
 
-        // Get all attributes
         for (let attr of element.attributes) {
             details.attributes[attr.name] = attr.value;
         }
@@ -508,6 +503,7 @@
     }
 
     // ============= DOM TREE GENERATOR =============
+    // FIX 2: Stored XSS Addressed (All dynamic attributes/content wrapped in escapeHTML)
     function generateDOMTree(element = document.body, depth = 0, maxDepth = 3) {
         if (depth > maxDepth) return '';
 
@@ -524,11 +520,11 @@
             html += `
                 <div class="dom-tree-item" style="margin-left: ${depth * 15}px; padding: 2px 0;">
                     <span class="dom-tree-icon" ${!isCollapsible ? 'style="visibility: hidden;"' : ''}>${icon}</span>
-                    <span class="dom-tree-tag">&lt;${child.tagName.toLowerCase()}</span>
-                    ${child.id ? `<span class="dom-tree-id"> id="${child.id}"</span>` : ''}
-                    ${child.className ? `<span class="dom-tree-class"> class="${child.className}"</span>` : ''}
+                    <span class="dom-tree-tag">&lt;${escapeHTML(child.tagName.toLowerCase())}</span>
+                    ${child.id ? `<span class="dom-tree-id"> id="${escapeHTML(child.id)}"</span>` : ''}
+                    ${child.className ? `<span class="dom-tree-class"> class="${escapeHTML(child.className)}"</span>` : ''}
                     <span class="dom-tree-tag">&gt;</span>
-                    <span class="dom-tree-text">${child.textContent.substring(0, 50)}</span>
+                    <span class="dom-tree-text">${escapeHTML(child.textContent.substring(0, 50))}</span>
                 </div>
             `;
 
@@ -559,361 +555,102 @@
             @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
             #anh-devtools-container {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                width: 100%;
-                height: 50vh;
-                background: #1e1e1e;
-                border-top: 1px solid #333;
-                z-index: 2147483640;
-                display: flex;
-                flex-direction: column;
-                animation: slideUp 0.3s ease;
-                font-family: 'Segoe UI', sans-serif;
-                color: #d4d4d4;
-                overflow: hidden;
+                position: fixed; bottom: 0; left: 0; right: 0; width: 100%; height: 50vh;
+                background: #1e1e1e; border-top: 1px solid #333; z-index: 2147483640;
+                display: flex; flex-direction: column; animation: slideUp 0.3s ease;
+                font-family: 'Segoe UI', sans-serif; color: #d4d4d4; overflow: hidden;
             }
 
-            /* Responsive adjustments */
-            @media (max-width: 1024px) {
-                #anh-devtools-container {
-                    height: 60vh;
-                }
-            }
-
+            @media (max-width: 1024px) { #anh-devtools-container { height: 60vh; } }
             @media (max-width: 768px) {
-                #anh-devtools-container {
-                    height: 70vh;
-                }
+                #anh-devtools-container { height: 70vh; }
                 .devtools-header { flex-wrap: wrap; }
                 .devtools-tabs { margin-top: 5px; }
             }
-
             @media (max-width: 480px) {
-                #anh-devtools-container {
-                    height: 100vh;
-                    top: 0;
-                    bottom: auto;
-                    border-radius: 8px 8px 0 0;
-                }
+                #anh-devtools-container { height: 100vh; top: 0; bottom: auto; border-radius: 8px 8px 0 0; }
                 .devtools-tabs button { padding: 6px 8px; font-size: 10px; }
             }
 
-            .devtools-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 8px 12px;
-                background: #252526;
-                border-bottom: 1px solid #333;
-                gap: 8px;
-            }
-
-            .devtools-tabs {
-                display: flex;
-                gap: 2px;
-                overflow-x: auto;
-                flex: 1;
-                scrollbar-width: thin;
-            }
-
-            .devtools-tab {
-                padding: 8px 14px;
-                background: #2d2d2d;
-                border: none;
-                cursor: pointer;
-                color: #969696;
-                font-size: 12px;
-                border-bottom: 2px solid transparent;
-                transition: all 0.2s;
-                white-space: nowrap;
-            }
-
+            .devtools-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #252526; border-bottom: 1px solid #333; gap: 8px; }
+            .devtools-tabs { display: flex; gap: 2px; overflow-x: auto; flex: 1; scrollbar-width: thin; }
+            .devtools-tab { padding: 8px 14px; background: #2d2d2d; border: none; cursor: pointer; color: #969696; font-size: 12px; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
             .devtools-tab:hover { background: #3d3d3d; }
-            .devtools-tab.active {
-                background: #1e1e1e;
-                color: #fff;
-                border-bottom-color: #007acc;
-            }
+            .devtools-tab.active { background: #1e1e1e; color: #fff; border-bottom-color: #007acc; }
 
-            .devtools-controls {
-                display: flex;
-                gap: 8px;
-                align-items: center;
-            }
-
-            .devtools-btn {
-                padding: 6px 12px;
-                border: none;
-                border-radius: 3px;
-                cursor: pointer;
-                font-size: 11px;
-                font-weight: bold;
-                color: white;
-                transition: all 0.2s;
-            }
-
+            .devtools-controls { display: flex; gap: 8px; align-items: center; }
+            .devtools-btn { padding: 6px 12px; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold; color: white; transition: all 0.2s; }
             .btn-picker { background: #0e639c; }
             .btn-resize { background: #0e639c; }
             .btn-clear { background: #d32f2f; }
             .btn-close { background: #d32f2f; }
-
             .devtools-btn:hover { opacity: 0.8; }
             .devtools-btn.active { background: #007acc; }
 
-            .devtools-content {
-                flex: 1;
-                overflow: auto;
-                display: flex;
-            }
-
-            .panel {
-                display: none;
-                flex: 1;
-                overflow: auto;
-                padding: 12px;
-                width: 100%;
-            }
-
+            .devtools-content { flex: 1; overflow: auto; display: flex; }
+            .panel { display: none; flex: 1; overflow: auto; padding: 12px; width: 100%; }
             .panel.active { display: block; }
 
-            /* Inspector Panel */
-            .inspector-section {
-                margin-bottom: 16px;
-                border-left: 3px solid #007acc;
-                padding-left: 12px;
-            }
-
-            .inspector-title {
-                font-weight: bold;
-                color: #4ec9b0;
-                margin-bottom: 8px;
-                font-size: 12px;
-            }
-
-            .inspector-property {
-                display: flex;
-                justify-content: space-between;
-                padding: 4px 0;
-                border-bottom: 1px solid #333;
-                font-size: 11px;
-                font-family: monospace;
-            }
-
+            .inspector-section { margin-bottom: 16px; border-left: 3px solid #007acc; padding-left: 12px; }
+            .inspector-title { font-weight: bold; color: #4ec9b0; margin-bottom: 8px; font-size: 12px; }
+            .inspector-property { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #333; font-size: 11px; font-family: monospace; }
             .inspector-key { color: #9cdcfe; }
             .inspector-value { color: #ce9178; }
 
-            .dom-tree-item {
-                padding: 2px 0;
-                cursor: pointer;
-                font-size: 12px;
-                font-family: monospace;
-                user-select: none;
-            }
-
+            .dom-tree-item { padding: 2px 0; cursor: pointer; font-size: 12px; font-family: monospace; user-select: none; }
             .dom-tree-item:hover { background: #2d2d30; }
-
-            .dom-tree-icon {
-                cursor: pointer;
-                color: #007acc;
-                margin-right: 4px;
-            }
-
+            .dom-tree-icon { cursor: pointer; color: #007acc; margin-right: 4px; }
             .dom-tree-tag { color: #9cdcfe; }
             .dom-tree-id { color: #ce9178; }
             .dom-tree-class { color: #4ec9b0; }
             .dom-tree-text { color: #808080; font-size: 10px; }
 
-            /* Console Panel */
-            .console-message {
-                padding: 8px;
-                margin: 4px 0;
-                border-left: 3px solid #007acc;
-                border-radius: 2px;
-                font-size: 12px;
-                font-family: monospace;
-                word-break: break-word;
-            }
-
+            .console-message { padding: 8px; margin: 4px 0; border-left: 3px solid #007acc; border-radius: 2px; font-size: 12px; font-family: monospace; word-break: break-word; }
             .console-log { border-left-color: #4ec9b0; color: #d4d4d4; }
             .console-error { border-left-color: #f48771; color: #f48771; }
             .console-warn { border-left-color: #dcdcaa; color: #dcdcaa; }
             .console-info { border-left-color: #4fc1ff; color: #4fc1ff; }
-
             .console-time { color: #888; font-size: 10px; }
 
-            /* Network Panel */
-            .network-request {
-                padding: 8px;
-                margin: 4px 0;
-                background: #2d2d2d;
-                border-radius: 3px;
-                font-size: 11px;
-                font-family: monospace;
-            }
-
+            .network-request { padding: 8px; margin: 4px 0; background: #2d2d2d; border-radius: 3px; font-size: 11px; font-family: monospace; }
             .network-url { color: #9cdcfe; margin-bottom: 4px; word-break: break-all; }
             .network-meta { display: flex; justify-content: space-between; color: #888; }
-
             .network-status-200 { color: #4ec9b0; }
             .network-status-error { color: #f48771; }
             .network-status-pending { color: #dcdcaa; }
 
-            /* Performance Panel */
-            .perf-metric {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 8px;
-                margin-bottom: 12px;
-            }
-
-            .perf-item {
-                background: #2d2d2d;
-                padding: 8px;
-                border-radius: 3px;
-                border-left: 3px solid #007acc;
-            }
-
+            .perf-metric { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+            .perf-item { background: #2d2d2d; padding: 8px; border-radius: 3px; border-left: 3px solid #007acc; }
             .perf-label { color: #9cdcfe; font-size: 11px; }
             .perf-value { color: #4ec9b0; font-size: 14px; font-weight: bold; }
 
-            /* Accessibility Panel */
-            .a11y-issue {
-                padding: 8px;
-                margin: 4px 0;
-                border-radius: 3px;
-                font-size: 11px;
-                border-left: 3px solid;
-            }
-
+            .a11y-issue { padding: 8px; margin: 4px 0; border-radius: 3px; font-size: 11px; border-left: 3px solid; }
             .a11y-error { background: #3d0a0a; border-left-color: #f48771; color: #f48771; }
             .a11y-warn { background: #3d2d0a; border-left-color: #dcdcaa; color: #dcdcaa; }
             .a11y-info { background: #0a2d3d; border-left-color: #4fc1ff; color: #4fc1ff; }
-
             .a11y-element { color: #9cdcfe; font-family: monospace; }
 
-            /* Responsive Preview Modal */
-            #anh-responsive-preview {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.9);
-                z-index: 2147483650;
-                display: none;
-                flex-direction: column;
-                animation: fadeIn 0.3s ease;
-            }
-
-            .preview-toolbar {
-                background: #252526;
-                padding: 10px;
-                display: flex;
-                gap: 10px;
-                align-items: center;
-                border-bottom: 1px solid #333;
-                flex-wrap: wrap;
-            }
-
-            .preview-device-btn {
-                padding: 6px 12px;
-                background: #2d2d2d;
-                border: 1px solid #555;
-                color: white;
-                cursor: pointer;
-                border-radius: 3px;
-                font-size: 12px;
-                transition: all 0.2s;
-            }
-
+            #anh-responsive-preview { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 2147483650; display: none; flex-direction: column; animation: fadeIn 0.3s ease; }
+            .preview-toolbar { background: #252526; padding: 10px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #333; flex-wrap: wrap; }
+            .preview-device-btn { padding: 6px 12px; background: #2d2d2d; border: 1px solid #555; color: white; cursor: pointer; border-radius: 3px; font-size: 12px; transition: all 0.2s; }
             .preview-device-btn.active { background: #007acc; border-color: #007acc; }
+            .preview-frame { flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px; overflow: auto; }
+            .preview-viewport { background: white; border: 8px solid #333; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 50px rgba(0,0,0,0.5); width: 100%; height: 100%; max-width: 100%; max-height: 100%; }
+            .preview-viewport iframe { width: 100%; height: 100%; border: none; }
 
-            .preview-frame {
-                flex: 1;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                padding: 20px;
-                overflow: auto;
-            }
+            .devtools-content::-webkit-scrollbar, .panel::-webkit-scrollbar { width: 8px; }
+            .devtools-content::-webkit-scrollbar-track, .panel::-webkit-scrollbar-track { background: #1e1e1e; }
+            .devtools-content::-webkit-scrollbar-thumb, .panel::-webkit-scrollbar-thumb { background: #464647; border-radius: 4px; }
+            .devtools-content::-webkit-scrollbar-thumb:hover, .panel::-webkit-scrollbar-thumb:hover { background: #5e5e5f; }
 
-            .preview-viewport {
-                background: white;
-                border: 8px solid #333;
-                border-radius: 8px;
-                overflow: hidden;
-                box-shadow: 0 10px 50px rgba(0,0,0,0.5);
-                width: 100%;
-                height: 100%;
-                max-width: 100%;
-                max-height: 100%;
-            }
-
-            .preview-viewport iframe {
-                width: 100%;
-                height: 100%;
-                border: none;
-            }
-
-            /* Scrollbar Styling */
-            .devtools-content::-webkit-scrollbar,
-            .panel::-webkit-scrollbar {
-                width: 8px;
-            }
-
-            .devtools-content::-webkit-scrollbar-track,
-            .panel::-webkit-scrollbar-track {
-                background: #1e1e1e;
-            }
-
-            .devtools-content::-webkit-scrollbar-thumb,
-            .panel::-webkit-scrollbar-thumb {
-                background: #464647;
-                border-radius: 4px;
-            }
-
-            .devtools-content::-webkit-scrollbar-thumb:hover,
-            .panel::-webkit-scrollbar-thumb:hover {
-                background: #5e5e5f;
-            }
-
-            /* Notification */
-            .devtools-notification {
-                position: fixed;
-                bottom: 60vh;
-                right: 20px;
-                background: #007acc;
-                color: white;
-                padding: 10px 16px;
-                border-radius: 3px;
-                font-size: 12px;
-                z-index: 2147483650;
-                animation: slideUp 0.3s ease;
-            }
-
+            .devtools-notification { position: fixed; bottom: 60vh; right: 20px; background: #007acc; color: white; padding: 10px 16px; border-radius: 3px; font-size: 12px; z-index: 2147483650; animation: slideUp 0.3s ease; }
             .devtools-notification.error { background: #d32f2f; }
             .devtools-notification.warn { background: #ff9800; }
             .devtools-notification.success { background: #4caf50; }
 
-            /* Hide main content when devtools is open */
-            body.devtools-open > *:not(#anh-devtools-container):not(.devtools-notification):not(#anh-element-picker-overlay) {
-                margin-bottom: 50vh;
-            }
-
-            @media (max-width: 768px) {
-                body.devtools-open > *:not(#anh-devtools-container):not(.devtools-notification):not(#anh-element-picker-overlay) {
-                    margin-bottom: 70vh;
-                }
-            }
-
-            @media (max-width: 480px) {
-                body.devtools-open > *:not(#anh-devtools-container):not(.devtools-notification):not(#anh-element-picker-overlay) {
-                    margin-bottom: 0;
-                }
-            }
+            body.devtools-open > *:not(#anh-devtools-container):not(.devtools-notification):not(#anh-element-picker-overlay) { margin-bottom: 50vh; }
+            @media (max-width: 768px) { body.devtools-open > *:not(#anh-devtools-container):not(.devtools-notification):not(#anh-element-picker-overlay) { margin-bottom: 70vh; } }
+            @media (max-width: 480px) { body.devtools-open > *:not(#anh-devtools-container):not(.devtools-notification):not(#anh-element-picker-overlay) { margin-bottom: 0; } }
         `;
         document.head.appendChild(style);
     }
@@ -938,7 +675,6 @@
             </div>
 
             <div class="devtools-content">
-                <!-- Inspector Panel -->
                 <div class="panel active" id="panel-0">
                     <div class="inspector-section">
                         <div class="inspector-title">DOM Tree</div>
@@ -946,12 +682,10 @@
                     </div>
                 </div>
 
-                <!-- Console Panel -->
                 <div class="panel" id="panel-1">
                     <div id="console-output"></div>
                 </div>
 
-                <!-- Sources Panel -->
                 <div class="panel" id="panel-2">
                     <div style="display: flex; gap: 10px; height: 100%;">
                         <div style="width: 200px; border-right: 1px solid #333; overflow-y: auto;">
@@ -964,17 +698,14 @@
                     </div>
                 </div>
 
-                <!-- Network Panel -->
                 <div class="panel" id="panel-3">
                     <div id="network-output"></div>
                 </div>
 
-                <!-- Performance Panel -->
                 <div class="panel" id="panel-4">
                     <div id="performance-output"></div>
                 </div>
 
-                <!-- Accessibility Panel -->
                 <div class="panel" id="panel-5">
                     <div id="accessibility-output"></div>
                 </div>
@@ -1023,18 +754,18 @@
                     <div class="inspector-title">Element</div>
                     <div class="inspector-property">
                         <span class="inspector-key">Tag:</span>
-                        <span class="inspector-value">&lt;${details.tag}&gt;</span>
+                        <span class="inspector-value">&lt;${escapeHTML(details.tag)}&gt;</span>
                     </div>
                     ${details.id ? `
                         <div class="inspector-property">
                             <span class="inspector-key">ID:</span>
-                            <span class="inspector-value">#${details.id}</span>
+                            <span class="inspector-value">#${escapeHTML(details.id)}</span>
                         </div>
                     ` : ''}
                     ${details.classes ? `
                         <div class="inspector-property">
                             <span class="inspector-key">Classes:</span>
-                            <span class="inspector-value">${details.classes}</span>
+                            <span class="inspector-value">${escapeHTML(details.classes)}</span>
                         </div>
                     ` : ''}
                 </div>
@@ -1063,8 +794,8 @@
                     <div class="inspector-title">Styles (Top 10)</div>
                     ${Array.from(details.styles).slice(0, 10).map(prop => `
                         <div class="inspector-property">
-                            <span class="inspector-key">${prop}:</span>
-                            <span class="inspector-value">${details.styles.getPropertyValue(prop)}</span>
+                            <span class="inspector-key">${escapeHTML(prop)}:</span>
+                            <span class="inspector-value">${escapeHTML(details.styles.getPropertyValue(prop))}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -1074,6 +805,8 @@
 
     function updateConsolePanel() {
         const output = document.getElementById('console-output');
+        if (!output) return; // Fail safe if panel isn't rendered yet
+        
         if (STATE.consoleMessages.length === 0) {
             output.innerHTML = '<div style="color: #888; font-size: 12px;">No messages yet</div>';
             return;
@@ -1119,6 +852,8 @@
 
     function updateNetworkPanel() {
         const output = document.getElementById('network-output');
+        if (!output) return; // Fail safe
+        
         if (STATE.networkRequests.length === 0) {
             output.innerHTML = '<div style="color: #888; font-size: 12px;">No network requests</div>';
             return;
@@ -1149,7 +884,7 @@
             if (key !== 'memory') {
                 html += `
                     <div class="perf-item">
-                        <div class="perf-label">${formatLabel(key)}</div>
+                        <div class="perf-label">${escapeHTML(formatLabel(key))}</div>
                         <div class="perf-value">${value}ms</div>
                     </div>
                 `;
@@ -1164,15 +899,15 @@
                     <div class="inspector-title">Memory Usage</div>
                     <div class="inspector-property">
                         <span class="inspector-key">Used:</span>
-                        <span class="inspector-value">${STATE.performanceMetrics.memory.usedJSHeapSize}</span>
+                        <span class="inspector-value">${escapeHTML(STATE.performanceMetrics.memory.usedJSHeapSize)}</span>
                     </div>
                     <div class="inspector-property">
                         <span class="inspector-key">Total:</span>
-                        <span class="inspector-value">${STATE.performanceMetrics.memory.totalJSHeapSize}</span>
+                        <span class="inspector-value">${escapeHTML(STATE.performanceMetrics.memory.totalJSHeapSize)}</span>
                     </div>
                     <div class="inspector-property">
                         <span class="inspector-key">Limit:</span>
-                        <span class="inspector-value">${STATE.performanceMetrics.memory.jsHeapSizeLimit}</span>
+                        <span class="inspector-value">${escapeHTML(STATE.performanceMetrics.memory.jsHeapSizeLimit)}</span>
                     </div>
                 </div>
             `;
@@ -1192,9 +927,9 @@
 
         output.innerHTML = issues.map(issue => `
             <div class="a11y-issue a11y-${issue.level}">
-                <div style="font-weight: bold; margin-bottom: 2px;">${issue.issue}</div>
+                <div style="font-weight: bold; margin-bottom: 2px;">${escapeHTML(issue.issue)}</div>
                 <div style="font-size: 10px; color: #888;">
-                    <span class="a11y-element">${issue.selector}</span>
+                    <span class="a11y-element">${escapeHTML(issue.selector)}</span>
                 </div>
             </div>
         `).join('');
@@ -1215,7 +950,7 @@
             <div class="preview-toolbar">
                 ${Object.entries(VIEWPORT_SIZES).map(([key, size]) => `
                     <button class="preview-device-btn" data-width="${size.width}" data-height="${size.height}">
-                        ${size.name}
+                        ${escapeHTML(size.name)}
                     </button>
                 `).join('')}
                 <button style="margin-left: auto; background: #d32f2f; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 3px;" onclick="document.getElementById('anh-responsive-preview').remove()">✖ Close</button>
@@ -1232,7 +967,6 @@
         const htmlFile = STATE.sourceFiles.find(f => f.type === 'html');
         let finalHTML = htmlFile ? htmlFile.content : '<html><body></body></html>';
 
-        // Inject styles and scripts
         const cssFiles = STATE.sourceFiles.filter(f => f.type === 'css');
         cssFiles.forEach(css => {
             finalHTML = finalHTML.replace(/<\/head>/i, `<style>${css.content}</style></head>`);
@@ -1263,12 +997,12 @@
             });
         });
 
-        // Set default to Desktop
         document.querySelector('[data-width="1920"]').click();
     }
 
     // ============= UTILITIES =============
     function escapeHTML(text) {
+        if (!text) return '';
         const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
         return String(text).replace(/[&<>"']/g, char => map[char]);
     }
@@ -1297,6 +1031,7 @@
         showNotification('Panels cleared', 'success');
     }
 
+    // FIX 3: Memory Leak Addressed (Wipe Memory when DevTools are closed)
     function closeDevTools() {
         const container = document.getElementById('anh-devtools-container');
         if (container) container.remove();
@@ -1308,6 +1043,12 @@
         if (overlay) overlay.remove();
 
         STATE.blobURLs.forEach(url => URL.revokeObjectURL(url));
+        
+        // Critical cleanup to prevent background Out-Of-Memory leaks
+        STATE.consoleMessages = [];
+        STATE.networkRequests = [];
+        STATE.sourceFiles = [];
+        
         document.body.classList.remove('devtools-open');
         STATE.isDevToolsOpen = false;
 
