@@ -618,7 +618,7 @@
                 if (e.key === 'Escape') UIEngine.close();
 
                 // CTRL + S + B: Open Dashboard
-                if (e.ctrlKey && State.pressedKeys.has('D')) {
+                if (e.ctrlKey && State.pressedKeys.has('L')) {
                     e.preventDefault();
                     UIEngine.open();
                 }
