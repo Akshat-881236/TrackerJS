@@ -1,7 +1,7 @@
 /**
  * FILE: anh-inspection-mode.js
  * ARCHITECT: Senior Browser Runtime Engineer & DevTools UI Systems Designer
- * VERSION: ANH Inspector Alpha (v1.0.0)
+ * VERSION: ANH Inspector Alpha (v2.0.0 - Production Safe)
  * ECOSYSTEM: Akshat Network Hub (ANH) Runtime Sandbox Integration Layer
  * NETWORKING: Strict Client-Side Sandbox (No Backend Dependencies, No Callbacks)
  */
@@ -15,7 +15,7 @@
     const CONFIG = {
         panelId: 'anh-inspector-root-panel',
         stylesId: 'anh-inspector-embedded-styles',
-        bootstrapIconsUrl: 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css'
+        maxHighlightLength: 250000 // Prevents main-thread locks on massive DOMs
     };
 
     let activePanelInstance = null;
@@ -24,11 +24,31 @@
     let sidebarWidth = 260;
 
     // ==================================================================
-    // CROSS-PANEL ORCHESTRATION INTERFACE (COORDINATION PLATFORM)
+    // INLINE SVG ICON LIBRARY (Removes CDN Dependency / Offline Safe)
+    // ==================================================================
+    const Icons = {
+        terminal: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9zM3.854 4.146a.5.5 0 1 0-.708.708L4.793 6.5 3.146 8.146a.5.5 0 1 0 .708.708l2-2a.5.5 0 0 0 0-.708l-2-2z"/><path d="M2 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2H2zm0 1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/></svg>`,
+        close: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z"/></svg>`,
+        html: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.207V5a.5.5 0 0 0 1 0v-4.5z"/></svg>`,
+        js: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M3.1 4H2.2v5.1c0 1 .6 1.5 1.7 1.5h.3v-.8h-.2c-.5 0-.8-.2-.8-.7V4zm4.4 3.7c-.2-.1-.5-.2-.8-.2-.6 0-1 .3-1 .8 0 .5.3.7.8.9l.6.2c.4.1.6.3.6.6 0 .4-.3.7-.9.7-.5 0-.9-.2-1.1-.4v.9c.2.2.6.4 1.1.4.7 0 1.2-.3 1.2-.9 0-.6-.3-.8-.8-1l-.5-.2c-.3-.1-.5-.3-.5-.5 0-.3.2-.5.7-.5.4 0 .7.1.9.3v-.8z"/></svg>`,
+        css: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.312.556-3.287 1.054V2.828zm13.5 10.206c-1.01-.518-2.22-.954-3.486-1.082-1.09-.11-2.278.026-3.213.562V2.687c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v10.206z"/></svg>`,
+        json: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M4 0h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H4z"/></svg>`,
+        shield: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M5.338 1.59a61.44 61.44 0 0 0-2.837.856.481.481 0 0 0-.328.39c-.554 4.157.726 7.19 2.253 9.188a10.725 10.725 0 0 0 2.287 2.233c.346.244.652.42.893.533.12.057.218.095.293.118a.55.55 0 0 0 .101.025.615.615 0 0 0 .1-.025c.076-.023.174-.061.294-.118.24-.113.547-.29.893-.533a10.726 10.726 0 0 0 2.287-2.233c1.527-1.997 2.807-5.031 2.253-9.188a.48.48 0 0 0-.328-.39c-.651-.213-1.75-.56-2.837-.855C9.552 1.29 8.531 1.067 8 1.067c-.53 0-1.552.223-2.662.524zM5.072.56C6.157.265 7.31 0 8 0s1.843.265 2.928.56c1.11.3 2.229.655 2.887.87a1.54 1.54 0 0 1 1.044 1.262c.596 4.477-.787 7.795-2.465 9.99a11.775 11.775 0 0 1-2.517 2.453 7.159 7.159 0 0 1-1.048.625c-.28.132-.581.24-.829.24s-.548-.108-.829-.24a7.158 7.158 0 0 1-1.048-.625 11.777 11.777 0 0 1-2.517-2.453C1.928 10.487.545 7.169 1.141 2.692A1.54 1.54 0 0 1 2.185 1.43 62.456 62.456 0 0 1 5.072.56z"/></svg>`,
+        link: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/><path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/></svg>`,
+        copy: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1H2z"/></svg>`,
+        download: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>`,
+        search: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>`,
+        seo: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/></svg>`,
+        addBookmark: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.74.439L8 13.069l-5.26 2.87A.5.5 0 0 1 2 15.5V2zm6.5 3a.5.5 0 0 0-1 0v2H5.5a.5.5 0 0 0 0 1H7v2a.5.5 0 0 0 1 0V8h1.5a.5.5 0 0 0 0-1H8V5z"/></svg>`,
+        bookmarks: `<svg width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M2 4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v11.5a.5.5 0 0 1-.777.416L7 13.101l-4.223 2.815A.5.5 0 0 1 2 15.5V4zm2-1a1 1 0 0 0-1 1v10.566l3.723-2.482a.5.5 0 0 1 .554 0L11 14.566V4a1 1 0 0 0-1-1H4z"/></svg>`
+    };
+
+    // ==================================================================
+    // CROSS-PANEL ORCHESTRATION INTERFACE
     // ==================================================================
     const PanelOrchestrator = {
         dismissCompetitors() {
-            // Unmount sibling framework panels to ensure single-threaded execution context threads
+            // Unmount sibling framework panels safely
             const seoPanel = document.getElementById('anh-seo-auditor-panel');
             if (seoPanel) seoPanel.remove();
 
@@ -39,32 +59,30 @@
             if (existingInspector) {
                 existingInspector.remove();
                 activePanelInstance = null;
-                return true; // Toggled state off if requested on self matching node
+                return true; 
             }
             return false;
         }
     };
 
     // ==================================================================
-    // SYNTAX HIGHLIGHTING ENGINE (STANDALONE PARSER CORE)
+    // SYNTAX HIGHLIGHTING ENGINE (PERFORMANCE OPTIMIZED)
     // ==================================================================
     const SyntaxEngine = {
         escape(str) {
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         },
         highlightHTML(rawCode) {
+            if (rawCode.length > CONFIG.maxHighlightLength) return this.escape(rawCode); // Prevent Main Thread Lock
             let code = this.escape(rawCode);
-            // Tags
             code = code.replace(/(&lt;\/?[a-zA-Z1-6]+.*?(?:&gt;|\b))/g, '<span style="color:#f43f5e;">$1</span>');
-            // Attributes
             code = code.replace(/(\s[a-zA-Z-]+)=&quot;/g, ' <span style="color:#fb923c;">$1</span>=&quot;');
-            // Strings
             code = code.replace(/(&quot;.*?&quot;)/g, '<span style="color:#10b981;">$1</span>');
-            // Comments
             code = code.replace(/(&lt;!--.*?--&gt;)/g, '<span style="color:#4b5563; font-style:italic;">$1</span>');
             return code;
         },
         highlightJS(rawCode) {
+            if (rawCode.length > CONFIG.maxHighlightLength) return this.escape(rawCode);
             let code = this.escape(rawCode);
             const keywords = /\b(const|let|var|function|return|if|else|for|while|switch|case|break|class|export|import|async|await|try|catch|new|window|document)\b/g;
             code = code.replace(keywords, '<span style="color:#38bdf8; font-weight:bold;">$1</span>');
@@ -72,55 +90,53 @@
             code = code.replace(/(&quot;.*?&quot;|'.*?'|`.*?`)/g, '<span style="color:#10b981;">$1</span>');
             return code;
         },
-        highlightJSON(rawCode) {
+        highlightCSS(rawCode) {
+            if (rawCode.length > CONFIG.maxHighlightLength) return this.escape(rawCode);
             let code = this.escape(rawCode);
-            // Properties keys
+            code = code.replace(/([a-zA-Z0-9_-]+)\s*\{/g, '<span style="color:#f43f5e;">$1</span> {');
+            code = code.replace(/([a-zA-Z-]+)\s*:/g, '<span style="color:#38bdf8;">$1</span>:');
+            code = code.replace(/:\s*([^;]+);/g, ': <span style="color:#10b981;">$1</span>;');
+            return code;
+        },
+        highlightJSON(rawCode) {
+            if (rawCode.length > CONFIG.maxHighlightLength) return this.escape(rawCode);
+            let code = this.escape(rawCode);
             code = code.replace(/(&quot;[^&]+&quot;)(?=\s*:)/g, '<span style="color:#a855f7; font-weight:600;">$1</span>');
-            // Values
             code = code.replace(/(:\s*)(&quot;.*?&quot;|true|false|null|\d+)/g, '$1<span style="color:#10b981;">$2</span>');
             return code;
         }
     };
 
     // ==================================================================
-    // DOM SOURCE COMPILATION PIPELINE
+    // CACHED ASSET EXTRACTOR 
     // ==================================================================
     const AssetExtractor = {
-        getInlineScripts() {
-            return Array.from(document.querySelectorAll('script:not([src])')).map((s, idx) => ({
-                name: `Inline Script [${idx + 1}]`,
-                type: 'js',
-                content: s.textContent
-            }));
-        },
-        getExternalScripts() {
-            return Array.from(document.querySelectorAll('script[src]')).map(s => ({
-                name: s.getAttribute('src'),
-                type: 'html',
-                content: `\n<script src="${s.getAttribute('src')}"></script>`
-            }));
-        },
-        getStylesheets() {
-            return Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map((s, idx) => ({
-                name: s.tagName === 'STYLE' ? `Inline Style Block [${idx + 1}]` : (s.getAttribute('href') || 'External Style'),
-                type: 'css',
-                content: s.textContent || `/* External Link: ${s.getAttribute('href')} */`
-            }));
-        },
-        getJsonLdBlocks() {
-            return Array.from(document.querySelectorAll('script[type="application/ld+json"]')).map((s, idx) => ({
-                name: `JSON-LD Structured Object [${idx + 1}]`,
-                type: 'json',
-                content: s.textContent
-            }));
-        },
-        getScriptoSignatures() {
+        cache: null,
+        buildCache() {
+            this.cache = {
+                inlineScripts: Array.from(document.querySelectorAll('script:not([src])')).map((s, idx) => ({
+                    name: `Inline Script [${idx + 1}]`, type: 'js', content: s.textContent
+                })),
+                externalScripts: Array.from(document.querySelectorAll('script[src]')).map(s => ({
+                    name: s.getAttribute('src'), type: 'html', content: `\n<script src="${s.getAttribute('src')}"></script>`
+                })),
+                stylesheets: Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map((s, idx) => ({
+                    name: s.tagName === 'STYLE' ? `Inline Style Block [${idx + 1}]` : (s.getAttribute('href') || 'External Style'),
+                    type: 'css', content: s.textContent || `/* External Link: ${s.getAttribute('href')} */`
+                })),
+                jsonLd: Array.from(document.querySelectorAll('script[type="application/ld+json"]')).map((s, idx) => ({
+                    name: `JSON-LD Structured Object [${idx + 1}]`, type: 'json', content: s.textContent
+                }))
+            };
+            
             const scripto = document.querySelector('script.Scripto');
-            return scripto ? [{
-                name: 'Scripto Security Identity Context Block',
-                type: 'js',
-                content: `// Active Authorized Access Token Meta Frame Data\n${scripto.textContent}`
+            this.cache.scripto = scripto ? [{
+                name: 'Scripto Security Identity Context Block', type: 'js', content: `// Active Authorized Access Token Meta Frame Data\n${scripto.textContent}`
             }] : [];
+        },
+        get(key) {
+            if (!this.cache) this.buildCache();
+            return this.cache[key] || [];
         }
     };
 
@@ -130,13 +146,6 @@
     const StylePipeline = {
         inject() {
             if (document.getElementById(CONFIG.stylesId)) return;
-            
-            // Dynamic insertion of Bootstrap Icon vector assets maps link blocks
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = CONFIG.bootstrapIconsUrl;
-            document.head.appendChild(link);
-
             const style = document.createElement('style');
             style.id = CONFIG.stylesId;
             style.textContent = `
@@ -189,9 +198,7 @@
                     padding: 4px 16px; background: #111729; border-top: 1px solid #1e293b;
                     display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b;
                 }
-                .anh-i-splitter {
-                    width: 4px; cursor: col-resize; background: transparent; transition: background 0.2s;
-                }
+                .anh-i-splitter { width: 4px; cursor: col-resize; background: transparent; transition: background 0.2s; }
                 .anh-i-splitter:hover { background: #38bdf8; }
                 .anh-i-cmenu {
                     position: fixed; background: #111729; border: 1px solid #1e293b; border-radius: 8px;
@@ -215,10 +222,12 @@
     const InspectorDashboardUI = {
         activeNode: null,
         activeFileRecord: { name: 'Live DOM Source', type: 'html', content: '' },
+        dragState: { onMouseMove: null, onMouseUp: null },
 
         open() {
-            if (PanelOrchestrator.dismissCompetitors()) return; // If active, toggle unmounts self cleanly
+            if (PanelOrchestrator.dismissCompetitors()) return;
             StylePipeline.inject();
+            AssetExtractor.buildCache();
 
             this.activeNode = document.createElement('div');
             this.activeNode.id = CONFIG.panelId;
@@ -229,6 +238,8 @@
 
             this.activeFileRecord.content = document.documentElement.outerHTML;
             this.renderLayoutStructure();
+            this.bindStaticEvents(); 
+            this.bindWorkspaceSpecificLoops();
         },
 
         close() {
@@ -245,12 +256,12 @@
             this.activeNode.innerHTML = `
                 <div class="anh-i-topbar">
                     <div style="display:flex; align-items:center; gap:10px; font-size:13px; font-weight:bold; letter-spacing:0.5px;">
-                        <i class="bi bi-terminal" style="color:#38bdf8;"></i>
+                        ${Icons.terminal}
                         <span>ANH Inspector Alpha</span>
-                        <span style="font-size:10px; background:#1e293b; padding:1px 6px; border-radius:4px; color:#64748b; font-weight:normal;">v1.0.0</span>
+                        <span style="font-size:10px; background:#1e293b; padding:1px 6px; border-radius:4px; color:#64748b; font-weight:normal;">v2.0.0</span>
                     </div>
                     <div style="display:flex; gap:12px; align-items:center;">
-                        <i class="bi bi-x-lg" id="anh-i-master-close" style="cursor:pointer; font-size:14px; color:#475569;"></i>
+                        <span id="anh-i-master-close" style="cursor:pointer; color:#475569;">${Icons.close}</span>
                     </div>
                 </div>
 
@@ -258,19 +269,19 @@
                     <div class="anh-i-sidebar" style="width: ${sidebarWidth}px;" id="anh-i-panel-sidebar">
                         <div class="anh-i-sidebar-header">Core Inspector Document Map</div>
                         <div class="anh-i-nav-node active" data-source-type="dom">
-                            <i class="bi bi-filetype-html" style="color:#f43f5e;"></i> Live DOM Source
+                            <span style="color:#f43f5e;">${Icons.html}</span> Live DOM Source
                         </div>
                         
                         <div class="anh-i-sidebar-header">Inline Document Blocks</div>
-                        ${this.generateNavItemsMarkup(AssetExtractor.getInlineScripts(), 'inline-js', 'bi-filetype-js', '#38bdf8')}
-                        ${this.generateNavItemsMarkup(AssetExtractor.getStylesheets(), 'css', 'bi-filetype-css', '#fb923c')}
+                        ${this.generateNavItemsMarkup(AssetExtractor.get('inlineScripts'), 'inline-js', Icons.js, '#38bdf8')}
+                        ${this.generateNavItemsMarkup(AssetExtractor.get('stylesheets'), 'css', Icons.css, '#fb923c')}
                         
                         <div class="anh-i-sidebar-header">Ecosystem Security & Schemas</div>
-                        ${this.generateNavItemsMarkup(AssetExtractor.getScriptoSignatures(), 'scripto', 'bi-shield-check', '#10b981')}
-                        ${this.generateNavItemsMarkup(AssetExtractor.getJsonLdBlocks(), 'jsonld', 'bi-device-ssd', '#a855f7')}
+                        ${this.generateNavItemsMarkup(AssetExtractor.get('scripto'), 'scripto', Icons.shield, '#10b981')}
+                        ${this.generateNavItemsMarkup(AssetExtractor.get('jsonLd'), 'jsonld', Icons.json, '#a855f7')}
                         
                         <div class="anh-i-sidebar-header">External Linked Scripts</div>
-                        ${this.generateNavItemsMarkup(AssetExtractor.getExternalScripts(), 'ext-js', 'bi-link-45deg', '#64748b')}
+                        ${this.generateNavItemsMarkup(AssetExtractor.get('externalScripts'), 'ext-js', Icons.link, '#64748b')}
                     </div>
 
                     <div class="anh-i-splitter" id="anh-i-panel-splitter"></div>
@@ -282,19 +293,16 @@
 
                 <div class="anh-i-statusbar">
                     <div id="anh-i-status-file">File: ${this.activeFileRecord.name}</div>
-                    <div style="display:flex; gap:16px;" id="anh-i-status-metrics">
-                        </div>
+                    <div style="display:flex; gap:16px;" id="anh-i-status-metrics"></div>
                 </div>
             `;
-
-            this.bindInteractionLogicLoops();
             this.recalculateStatusBarMetrics();
         },
 
-        generateNavItemsMarkup(recordList, groupKey, iconClass, color) {
+        generateNavItemsMarkup(recordList, groupKey, iconSvg, color) {
             return recordList.map((item, index) => `
                 <div class="anh-i-nav-node" data-group="${groupKey}" data-index="${index}" title="${item.name}">
-                    <i class="bi ${iconClass}" style="color:${color};"></i> ${item.name}
+                    <span style="color:${color}; display:flex;">${iconSvg}</span> ${item.name}
                 </div>
             `).join('');
         },
@@ -304,11 +312,10 @@
             const raw = this.activeFileRecord.content;
 
             if (this.activeFileRecord.type === 'html') highlightedCode = SyntaxEngine.highlightHTML(raw);
-            else if (this.activeFileRecord.type === 'css') highlightedCode = SyntaxEngine.highlightHTML(raw); // Cascade match formatting parameters fallback rules
+            else if (this.activeFileRecord.type === 'css') highlightedCode = SyntaxEngine.highlightCSS(raw);
             else if (this.activeFileRecord.type === 'js') highlightedCode = SyntaxEngine.highlightJS(raw);
             else if (this.activeFileRecord.type === 'json') highlightedCode = SyntaxEngine.highlightJSON(raw);
 
-            // Compute line indexing metrics rows count configurations
             const linesCount = raw.split('\n').length;
             let lineNumbersMarkup = '';
             for (let i = 1; i <= linesCount; i++) {
@@ -322,8 +329,8 @@
                         <div style="position:relative; display:flex; align-items:center;">
                             <input type="text" id="anh-i-search-code" placeholder="Find sequence..." style="background:#1e293b; border:1px solid #334155; padding:3px 8px; border-radius:4px; font-size:11px; color:white; width:140px;">
                         </div>
-                        <button class="anh-i-btn" id="anh-i-action-copy"><i class="bi bi-copy"></i> Copy</button>
-                        <button class="anh-i-btn" id="anh-i-action-dl"><i class="bi bi-download"></i> Export</button>
+                        <button class="anh-i-btn" id="anh-i-action-copy">${Icons.copy} Copy</button>
+                        <button class="anh-i-btn" id="anh-i-action-dl">${Icons.download} Export</button>
                     </div>
                 </div>
                 <div class="anh-i-code-container">
@@ -346,60 +353,101 @@
             `;
         },
 
-        bindInteractionLogicLoops() {
-            // Document exit master toggle button mapping elements pointers
-            document.getElementById('anh-i-master-close').onclick = () => this.close();
+        bindStaticEvents() {
+            document.getElementById('anh-i-master-close').addEventListener('click', () => this.close());
 
-            // Drag operations handles splitter allocation processing loops configuration setup parameters
             const splitter = document.getElementById('anh-i-panel-splitter');
             const sidebar = document.getElementById('anh-i-panel-sidebar');
             
-            splitter.onmousedown = (e) => {
+            this.dragState.onMouseMove = (moveEvent) => {
+                if (!isSidebarDragging) return;
+                let targetWidth = moveEvent.clientX;
+                if (targetWidth > 120 && targetWidth < 500) {
+                    sidebarWidth = targetWidth;
+                    sidebar.style.width = `${sidebarWidth}px`;
+                }
+            };
+
+            this.dragState.onMouseUp = () => {
+                isSidebarDragging = false;
+                document.removeEventListener('mousemove', this.dragState.onMouseMove);
+                document.removeEventListener('mouseup', this.dragState.onMouseUp);
+            };
+
+            splitter.addEventListener('mousedown', () => {
                 isSidebarDragging = true;
-                document.onmousemove = (moveEvent) => {
-                    if (!isSidebarDragging) return;
-                    let targetWidth = moveEvent.clientX;
-                    if (targetWidth > 120 && targetWidth < 500) { // Safety interface size guidelines caps boundaries
-                        sidebarWidth = targetWidth;
-                        sidebar.style.width = `${sidebarWidth}px`;
-                    }
-                };
-                document.onmouseup = () => {
-                    isSidebarDragging = false;
-                    document.onmousemove = null;
-                    document.onmouseup = null;
-                };
-            };
+                document.addEventListener('mousemove', this.dragState.onMouseMove);
+                document.addEventListener('mouseup', this.dragState.onMouseUp);
+            });
 
-            // Search execution filter logic framework strings matches maps processing tags execution rules
+            this.activeNode.addEventListener('click', (e) => {
+                const node = e.target.closest('.anh-i-nav-node');
+                if (!node) return;
+
+                this.activeNode.querySelectorAll('.anh-i-nav-node').forEach(n => n.classList.remove('active'));
+                node.classList.add('active');
+
+                const group = node.getAttribute('data-group');
+                const index = parseInt(node.getAttribute('data-index'));
+
+                if (node.getAttribute('data-source-type') === 'dom') {
+                    this.activeFileRecord = { name: 'Live DOM Source', type: 'html', content: document.documentElement.outerHTML };
+                } else if (group === 'inline-js') {
+                    const target = AssetExtractor.get('inlineScripts')[index];
+                    this.activeFileRecord = { name: target.name, type: 'js', content: target.content };
+                } else if (group === 'css') {
+                    const target = AssetExtractor.get('stylesheets')[index];
+                    this.activeFileRecord = { name: target.name, type: 'css', content: target.content };
+                } else if (group === 'scripto') {
+                    const target = AssetExtractor.get('scripto')[index];
+                    this.activeFileRecord = { name: target.name, type: 'js', content: target.content };
+                } else if (group === 'jsonld') {
+                    const target = AssetExtractor.get('jsonLd')[index];
+                    this.activeFileRecord = { name: target.name, type: 'json', content: target.content };
+                } else if (group === 'ext-js') {
+                    const target = AssetExtractor.get('externalScripts')[index];
+                    this.activeFileRecord = { name: target.name, type: 'html', content: target.content };
+                }
+
+                this.refreshWorkspaceView();
+            });
+        },
+
+        bindWorkspaceSpecificLoops() {
             const searchInput = document.getElementById('anh-i-search-code');
-            searchInput.oninput = () => {
-                const query = searchInput.value.toLowerCase();
-                const renderBlock = document.getElementById('anh-i-code-render-block');
-                if (!query) {
-                    this.refreshWorkspaceView();
-                    return;
-                }
-                
-                // Native search focus match viewport jump allocation sequences
-                const rawText = renderBlock.textContent;
-                if (rawText.toLowerCase().includes(query)) {
-                    // Primitive highlighting fallback text overlay strategy implementation context models bounds rules
+            const renderBlock = document.getElementById('anh-i-code-render-block');
+            const originalHTML = renderBlock.innerHTML; 
+            let debounceTimer;
+
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const query = e.target.value.trim().toLowerCase();
+                    if (!query) {
+                        renderBlock.innerHTML = originalHTML;
+                        return;
+                    }
                     const escapedQuery = query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                    const regex = new RegExp(`(${escapedQuery})`, 'gi');
-                    renderBlock.innerHTML = renderBlock.innerHTML.replace(regex, '<mark style="background:#f59e0b; color:#000000; border-radius:2px;">$1</mark>');
+                    const regex = new RegExp(`(?![^<]*>)(>?[^<]+)?(${escapedQuery})`, 'gi');
+                    renderBlock.innerHTML = originalHTML.replace(regex, (match, p1, p2) => {
+                         if (!p2) return match;
+                         return match.replace(new RegExp(`(${escapedQuery})`, 'i'), '<mark style="background:#f59e0b; color:#000000; border-radius:2px;">$1</mark>');
+                    });
+                }, 300);
+            });
+
+            document.getElementById('anh-i-action-copy').addEventListener('click', async (e) => {
+                const btn = e.currentTarget;
+                try {
+                    await navigator.clipboard.writeText(this.activeFileRecord.content);
+                    btn.innerHTML = `${Icons.shield} Copied!`;
+                } catch (err) {
+                    btn.innerHTML = `Failed`;
                 }
-            };
+                setTimeout(() => btn.innerHTML = `${Icons.copy} Copy`, 1500);
+            });
 
-            // Actions copy operational pipelines implementation hooks codes configurations
-            document.getElementById('anh-i-action-copy').onclick = (e) => {
-                navigator.clipboard.writeText(this.activeFileRecord.content);
-                e.target.innerHTML = `<i class="bi bi-check-lg"></i> Copied!`;
-                setTimeout(() => e.target.innerHTML = `<i class="bi bi-copy"></i> Copy`, 1500);
-            };
-
-            // Export local disk parameters downloads allocations mechanisms interfaces execution points
-            document.getElementById('anh-i-action-dl').onclick = () => {
+            document.getElementById('anh-i-action-dl').addEventListener('click', () => {
                 const blob = new Blob([this.activeFileRecord.content], { type: 'text/plain' });
                 const dUrl = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -407,38 +455,6 @@
                 a.download = this.activeFileRecord.name.toLowerCase().replace(/\s+/g, '-') + `.${this.activeFileRecord.type}`;
                 a.click();
                 URL.revokeObjectURL(dUrl);
-            };
-
-            // Sidebar navigation maps interactions triggers listeners routing mappings loops allocations
-            this.activeNode.querySelectorAll('.anh-i-nav-node').forEach(node => {
-                node.onclick = () => {
-                    this.activeNode.querySelectorAll('.anh-i-nav-node').forEach(n => n.classList.remove('active'));
-                    node.classList.add('active');
-
-                    const group = node.getAttribute('data-group');
-                    const index = parseInt(node.getAttribute('data-index'));
-
-                    if (node.getAttribute('data-source-type') === 'dom') {
-                        this.activeFileRecord = { name: 'Live DOM Source', type: 'html', content: document.documentElement.outerHTML };
-                    } else if (group === 'inline-js') {
-                        const target = AssetExtractor.getInlineScripts()[index];
-                        this.activeFileRecord = { name: target.name, type: 'js', content: target.content };
-                    } else if (group === 'css') {
-                        const target = AssetExtractor.getStylesheets()[index];
-                        this.activeFileRecord = { name: target.name, type: 'css', content: target.content };
-                    } else if (group === 'scripto') {
-                        const target = AssetExtractor.getScriptoSignatures()[index];
-                        this.activeFileRecord = { name: target.name, type: 'js', content: target.content };
-                    } else if (group === 'jsonld') {
-                        const target = AssetExtractor.getJsonLdBlocks()[index];
-                        this.activeFileRecord = { name: target.name, type: 'json', content: target.content };
-                    } else if (group === 'ext-js') {
-                        const target = AssetExtractor.getExternalScripts()[index];
-                        this.activeFileRecord = { name: target.name, type: 'html', content: target.content };
-                    }
-
-                    this.refreshWorkspaceView();
-                };
             });
         },
 
@@ -447,7 +463,7 @@
             workspace.innerHTML = this.generateWorkspaceTemplateRows();
             document.getElementById('anh-i-status-file').textContent = `File: ${this.activeFileRecord.name}`;
             this.recalculateStatusBarMetrics();
-            this.bindInteractionLogicLoops(); // Rebind actions items on clean injected nodes layout elements loops
+            this.bindWorkspaceSpecificLoops(); 
         }
     };
 
@@ -462,14 +478,19 @@
 
             this.menuElement = document.createElement('div');
             this.menuElement.className = 'anh-i-cmenu';
-            this.menuElement.style.left = `${x}px`;
-            this.menuElement.style.top = `${y}px`;
+            
+            // Boundary Clamping to prevent overflow
+            const safeX = Math.min(x, window.innerWidth - 230);
+            const safeY = Math.min(y, window.innerHeight - 180);
+            
+            this.menuElement.style.left = `${safeX}px`;
+            this.menuElement.style.top = `${safeY}px`;
 
             this.menuElement.innerHTML = `
-                <div class="anh-i-cmenu-item" id="anh-cm-inspect"><i class="bi bi-search"></i> Inspect Source Element</div>
-                <div class="anh-i-cmenu-item" id="anh-cm-seo"><i class="bi bi-speedometer2"></i> View Runtime SEO Score</div>
-                <div class="anh-i-cmenu-item" id="anh-cm-add-b"><i class="bi bi-bookmark-plus"></i> Add Link to Index Bookmark</div>
-                <div class="anh-i-cmenu-item" id="anh-cm-open-b"><i class="bi bi-bookmarks"></i> View Bookmark Pages</div>
+                <div class="anh-i-cmenu-item" id="anh-cm-inspect">${Icons.search} Inspect Source Element</div>
+                <div class="anh-i-cmenu-item" id="anh-cm-seo">${Icons.seo} View Runtime SEO Score</div>
+                <div class="anh-i-cmenu-item" id="anh-cm-add-b">${Icons.addBookmark} Add Link to Index Bookmark</div>
+                <div class="anh-i-cmenu-item" id="anh-cm-open-b">${Icons.bookmarks} View Bookmark Pages</div>
             `;
 
             document.body.appendChild(this.menuElement);
@@ -484,26 +505,34 @@
         },
 
         bindMenuActions() {
-            document.getElementById('anh-cm-inspect').onclick = () => {
+            document.getElementById('anh-cm-inspect').addEventListener('click', () => {
                 this.dismiss();
                 InspectorDashboardUI.open();
-            };
-            document.getElementById('anh-cm-seo').onclick = () => {
+            });
+            document.getElementById('anh-cm-seo').addEventListener('click', () => {
                 this.dismiss();
-                // Simulation shift R manual override invocation event tracking logic context sequences
-                window.dispatchEvent(new KeyboardEvent('keydown', { shiftKey: true, key: 'R' }));
-            };
-            document.getElementById('anh-cm-add-b').onclick = () => {
+                if (window.ANH_SEO && typeof window.ANH_SEO.openPanel === 'function') {
+                    window.ANH_SEO.openPanel();
+                } else {
+                    console.warn("ANH_SEO API unavailable. Ensure seo-runtime-auditor is loaded.");
+                }
+            });
+            document.getElementById('anh-cm-add-b').addEventListener('click', () => {
                 this.dismiss();
-                window.dispatchEvent(new KeyboardEvent('keydown', { shiftKey: true, key: 'B' }));
-            };
-            document.getElementById('anh-cm-open-b').onclick = () => {
+                if (window.ANH_BOOKMARK && typeof window.ANH_BOOKMARK.addCurrent === 'function') {
+                    window.ANH_BOOKMARK.addCurrent();
+                } else {
+                    console.warn("ANH_BOOKMARK API unavailable. Ensure smart-bookmark-intelligence is loaded.");
+                }
+            });
+            document.getElementById('anh-cm-open-b').addEventListener('click', () => {
                 this.dismiss();
-                window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, key: 'B', code: 'KeyB' })); // Alternate normalization checks routing options map elements
                 if (window.ANH_BOOKMARK && typeof window.ANH_BOOKMARK.open === 'function') {
                     window.ANH_BOOKMARK.open();
+                } else {
+                    console.warn("ANH_BOOKMARK API unavailable.");
                 }
-            };
+            });
         }
     };
 
@@ -512,7 +541,6 @@
     // ==================================================================
     const InstrumentationCoordinator = {
         init() {
-            // Keyboard shortcut allocation mappings sequence engine triggers configurations points context loops: CTRL + I
             window.addEventListener('keydown', (e) => {
                 if (e.ctrlKey && (e.key === 'I' || e.key === 'i')) {
                     e.preventDefault();
@@ -520,35 +548,29 @@
                 }
             });
 
-            // Native mouse right click context override mappings hooks sequences targets blocks
             window.addEventListener('contextmenu', (e) => {
-                // Safeguard against intercepting internal frame system right click options lists loops layout operations elements
                 if (activePanelInstance && activePanelInstance.contains(e.target)) return;
-                
                 e.preventDefault();
                 CustomContextMenuEngine.renderMenu(e.clientX, e.clientY);
             });
 
-            // Clean background click handlers prior selection unmount executions
             window.addEventListener('click', (e) => {
                 if (CustomContextMenuEngine.menuElement && !CustomContextMenuEngine.menuElement.contains(e.target)) {
                     CustomContextMenuEngine.dismiss();
                 }
             });
 
-            // Touch support interfaces configurations: Two Finger Tap logic allocations checks sequences
             window.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 2) {
                     e.preventDefault();
                     InspectorDashboardUI.open();
                 }
 
-                // Long Press Mobile Trigger implementation validation frameworks allocation configurations hooks
                 if (e.touches.length === 1) {
                     const touch = e.touches[0];
                     longPressTimer = setTimeout(() => {
                         CustomContextMenuEngine.renderMenu(touch.clientX, touch.clientY);
-                    }, 800); // Threshold execution interval caps bound limits values checks milliseconds
+                    }, 800); 
                 }
             }, { passive: false });
 
@@ -558,11 +580,14 @@
             window.addEventListener('touchmove', () => {
                 if (longPressTimer) clearTimeout(longPressTimer);
             });
+            window.addEventListener('touchcancel', () => {
+                if (longPressTimer) clearTimeout(longPressTimer);
+            });
         }
     };
 
-    // Instantiate engine orchestration runtime frameworks layers safely
     document.addEventListener('DOMContentLoaded', () => {
         InstrumentationCoordinator.init();
     });
+
 })();
